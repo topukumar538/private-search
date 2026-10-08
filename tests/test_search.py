@@ -14,7 +14,7 @@ def make_source(source_name, urls=(), error=None, delay=0.0):
     class Fake(SearchSource):
         name = source_name
 
-        async def search(self, query):
+        async def search(self, query, client):
             await asyncio.sleep(delay)
             if error:
                 raise error
@@ -27,7 +27,8 @@ def make_source(source_name, urls=(), error=None, delay=0.0):
 
 
 def run(sources):
-    return asyncio.run(search_all("query", sources=sources))
+    # Fake sources never use the network, so no real client is needed.
+    return asyncio.run(search_all("query", client=None, sources=sources))
 
 
 # ---------- normal cases ----------

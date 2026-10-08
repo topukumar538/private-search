@@ -15,30 +15,25 @@ MAX_RESULTS = 5
 class TavilySource(SearchSource):
     name = "tavily"
 
-    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
-        # Tests pass a fake transport; in production this stays None.
-        self.transport = transport
-
-    async def search(self, query: str) -> list[SearchResult]:
+    async def search(self, query: str, client: httpx.AsyncClient) -> list[SearchResult]:
         # Read the key on every search, so a missing key fails only this source.
         api_key = os.getenv("TAVILY_API_KEY")
 
         if not api_key:
             raise RuntimeError("TAVILY_API_KEY is not set.")
 
-        async with httpx.AsyncClient(timeout=15.0, transport=self.transport) as client:
-            response = await client.post(
-                API_URL,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "query": query,
-                    "search_depth": "basic",
-                    "max_results": MAX_RESULTS,
-                    "auto_parameters": False,
-                    "include_answer": False,
-                    "include_raw_content": False,
-                },
-            )
+        response = await client.post(
+            API_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "query": query,
+                "search_depth": "basic",
+                "max_results": MAX_RESULTS,
+                "auto_parameters": False,
+                "include_answer": False,
+                "include_raw_content": False,
+            },
+        )
 
         if response.status_code != 200:
             raise RuntimeError(f"Tavily search failed: HTTP {response.status_code}")

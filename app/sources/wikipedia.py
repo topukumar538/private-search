@@ -32,24 +32,19 @@ def remove_html(value: str) -> str:
 class WikipediaSource(SearchSource):
     name = "wikipedia"
 
-    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
-        # Tests pass a fake transport; in production this stays None.
-        self.transport = transport
-
-    async def search(self, query: str) -> list[SearchResult]:
-        async with httpx.AsyncClient(timeout=15.0, transport=self.transport) as client:
-            response = await client.get(
-                API_URL,
-                headers={"User-Agent": USER_AGENT},
-                params={
-                    "action": "query",
-                    "list": "search",
-                    "srsearch": query,
-                    "srlimit": MAX_RESULTS,
-                    "srprop": "snippet",
-                    "format": "json",
-                },
-            )
+    async def search(self, query: str, client: httpx.AsyncClient) -> list[SearchResult]:
+        response = await client.get(
+            API_URL,
+            headers={"User-Agent": USER_AGENT},
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": query,
+                "srlimit": MAX_RESULTS,
+                "srprop": "snippet",
+                "format": "json",
+            },
+        )
 
         if response.status_code != 200:
             raise RuntimeError(f"Wikipedia search failed: HTTP {response.status_code}")

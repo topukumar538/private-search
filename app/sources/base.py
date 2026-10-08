@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
+import httpx
 from pydantic import ValidationError
 
 from app.models import SearchResult
@@ -20,8 +21,8 @@ class SearchSource(ABC):
             raise TypeError(f"{cls.__name__} must define a non-empty 'name'.")
 
     @abstractmethod
-    async def search(self, query: str) -> list[SearchResult]:
-        """Return results for the query, best first.
+    async def search(self, query: str, client: httpx.AsyncClient) -> list[SearchResult]:
+        """Return results for the query, best first, using the shared client.
 
         Raise an exception if the source itself fails (network error,
         bad status, missing API key). The orchestrator treats that as

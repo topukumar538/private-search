@@ -1,24 +1,34 @@
 import asyncio
 
+import httpx
+
 from app.services.deduplication import remove_duplicates
 from app.services.ranking import rank_results
 from app.sources.base import SearchSource
 from app.sources.tavily import TavilySource
 from app.sources.wikipedia import WikipediaSource
 
+# Hard cap on one source call, however its time is spent.
 SOURCE_TIMEOUT = 5.0
 
 # Every source the app can use. Adding a source means adding it here.
 SOURCES: list[SearchSource] = [TavilySource(), WikipediaSource()]
 
 
-async def search_all(query: str, sources: list[SearchSource] | None = None) -> dict:
+async def search_all(
+    query: str,
+    client: httpx.AsyncClient,
+    sources: list[SearchSource] | None = None,
+) -> dict:
     # Tests pass fake sources; the app uses the real ones.
     if sources is None:
         sources = SOURCES
 
     responses = await asyncio.gather(
-        *(asyncio.wait_for(source.search(query), timeout=SOURCE_TIMEOUT) for source in sources),
+        *(
+            asyncio.wait_for(source.search(query, client), timeout=SOURCE_TIMEOUT)
+            for source in sources
+        ),
         return_exceptions=True,
     )
 

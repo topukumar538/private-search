@@ -1,7 +1,5 @@
-import asyncio
 import json
 
-import httpx
 import pytest
 
 from app.sources.tavily import TavilySource
@@ -12,27 +10,16 @@ def api_key(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "test-key")
 
 
-def fake_tavily(payload, status=200, seen=None):
-    """A fake network that answers every request with the given JSON."""
-
-    def handler(request):
-        if seen is not None:
-            seen.append(request)
-        return httpx.Response(status, json=payload)
-
-    return TavilySource(transport=httpx.MockTransport(handler))
-
-
 def result(title="Python", url="https://python.org", content="A language"):
     return {"title": title, "url": url, "content": content}
 
 
 # ---------- normal cases ----------
 
-def test_returns_results(api_key):
-    source = fake_tavily({"results": [result()]})
+def test_returns_results(network, api_key):
+    network.respond({"results": [result()]})
 
-    results = asyncio.run(source.search("python"))
+    results = network.search(TavilySource())
 
     assert len(results) == 1
     assert results[0].title == "Python"
@@ -41,13 +28,12 @@ def test_returns_results(api_key):
     assert results[0].source == "tavily"
 
 
-def test_sends_key_and_query(api_key):
-    seen = []
-    source = fake_tavily({"results": []}, seen=seen)
+def test_sends_key_and_query(network, api_key):
+    network.respond({"results": []})
 
-    asyncio.run(source.search("rust language"))
+    network.search(TavilySource(), query="rust language")
 
-    request = seen[0]
+    request = network.requests[0]
     body = json.loads(request.content)
     assert request.headers["Authorization"] == "Bearer test-key"
     assert body["query"] == "rust language"
@@ -56,52 +42,52 @@ def test_sends_key_and_query(api_key):
 
 # ---------- edge cases ----------
 
-def test_item_without_title_is_skipped_not_fatal(api_key):
+def test_item_without_title_is_skipped_not_fatal(network, api_key):
     # The old code used item["title"] and crashed the whole source here.
-    source = fake_tavily({"results": [
+    network.respond({"results": [
         result(title="Good 1"),
         {"url": "https://example.com/no-title", "content": "x"},
         result(title="Good 2"),
     ]})
 
-    results = asyncio.run(source.search("python"))
+    results = network.search(TavilySource())
 
     assert [r.title for r in results] == ["Good 1", "Good 2"]
 
 
-def test_missing_content_becomes_empty_snippet(api_key):
-    source = fake_tavily({"results": [{"title": "T", "url": "https://example.com"}]})
+def test_missing_content_becomes_empty_snippet(network, api_key):
+    network.respond({"results": [{"title": "T", "url": "https://example.com"}]})
 
-    results = asyncio.run(source.search("x"))
+    results = network.search(TavilySource())
 
     assert results[0].snippet == ""
 
 
-def test_unsafe_url_is_skipped(api_key):
-    source = fake_tavily({"results": [result(url="javascript:alert(1)")]})
+def test_unsafe_url_is_skipped(network, api_key):
+    network.respond({"results": [result(url="javascript:alert(1)")]})
 
-    assert asyncio.run(source.search("x")) == []
+    assert network.search(TavilySource()) == []
 
 
-def test_missing_results_key_gives_empty_list(api_key):
-    assert asyncio.run(fake_tavily({}).search("x")) == []
+def test_missing_results_key_gives_empty_list(network, api_key):
+    network.respond({})
+
+    assert network.search(TavilySource()) == []
 
 
 # ---------- failure cases ----------
 
-def test_missing_api_key_raises_before_any_request(monkeypatch):
+def test_missing_api_key_raises_before_any_request(network, monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    seen = []
-    source = fake_tavily({"results": []}, seen=seen)
 
     with pytest.raises(RuntimeError, match="TAVILY_API_KEY"):
-        asyncio.run(source.search("python"))
+        network.search(TavilySource())
 
-    assert seen == []
+    assert network.requests == []
 
 
-def test_http_error_raises(api_key):
-    source = fake_tavily({}, status=401)
+def test_http_error_raises(network, api_key):
+    network.respond(status=401)
 
     with pytest.raises(RuntimeError, match="401"):
-        asyncio.run(source.search("python"))
+        network.search(TavilySource())
