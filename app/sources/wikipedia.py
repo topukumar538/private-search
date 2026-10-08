@@ -3,6 +3,15 @@ from urllib.parse import quote
 
 import httpx
 
+from app.models import SearchResult
+from app.sources.base import SearchSource
+
+API_URL = "https://en.wikipedia.org/w/api.php"
+ARTICLE_URL = "https://en.wikipedia.org/wiki/"
+USER_AGENT = "PrivateSearch/0.1 (Personal search project)"
+MAX_RESULTS = 5
+
+
 class TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -13,54 +22,60 @@ class TextExtractor(HTMLParser):
 
 
 def remove_html(value: str) -> str:
+    """Keep only the text of an HTML fragment (also decodes &amp; etc.)."""
     parser = TextExtractor()
     parser.feed(value)
+    parser.close()
     return "".join(parser.parts)
 
 
-async def search_wikipedia(query: str) -> list[dict]:
-    query = query.strip()
+class WikipediaSource(SearchSource):
+    name = "wikipedia"
 
-    if not query:
-        raise ValueError("Search query cannot be empty.")
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
+        # Tests pass a fake transport; in production this stays None.
+        self.transport = transport
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(
-            "https://en.wikipedia.org/w/api.php",
-            headers={
-                "User-Agent": "PrivateSearch/0.1 (Personal search project)",
-            },
-        
-            params={
-                "action": "query",
-                "list": "search",
-                "srsearch": query,
-                "srlimit": 5,
-                "format": "json",
-                "srprop": "snippet",
-            },
-        )
+    async def search(self, query: str) -> list[SearchResult]:
+        async with httpx.AsyncClient(timeout=15.0, transport=self.transport) as client:
+            response = await client.get(
+                API_URL,
+                headers={"User-Agent": USER_AGENT},
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": query,
+                    "srlimit": MAX_RESULTS,
+                    "srprop": "snippet",
+                    "format": "json",
+                },
+            )
 
         if response.status_code != 200:
-            raise RuntimeError(
-                f"Wikipedia search failed: HTTP {response.status_code}"
-            )
+            raise RuntimeError(f"Wikipedia search failed: HTTP {response.status_code}")
 
         data = response.json()
 
-    if "error" in data:
-        raise RuntimeError("Wikipedia returned an API error.")
+        if "error" in data:
+            raise RuntimeError("Wikipedia returned an API error.")
 
-    results = []
+        return self.parse(data)
 
-    for item in data.get("query", {}).get("search", []):
-        page_title = quote(item["title"].replace(" ", "_"), safe="")
+    def parse(self, data: dict) -> list[SearchResult]:
+        items = []
 
-        results.append({
-            "title": item["title"],
-            "url": f"https://en.wikipedia.org/wiki/{page_title}",
-            "snippet": remove_html(item.get("snippet", "")),
-            "source": "wikipedia",
-        })
+        for item in data.get("query", {}).get("search", []):
+            if not isinstance(item, dict) or not isinstance(item.get("title"), str):
+                continue
 
-    return results
+            title = item["title"]
+            page = quote(title.replace(" ", "_"), safe="")
+            snippet = item.get("snippet")
+
+            items.append({
+                "title": title,
+                "url": ARTICLE_URL + page,
+                "snippet": remove_html(snippet) if isinstance(snippet, str) else "",
+            })
+
+        return self.build_results(items)

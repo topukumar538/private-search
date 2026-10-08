@@ -2,25 +2,23 @@ import asyncio
 
 from app.services.deduplication import remove_duplicates
 from app.services.ranking import rank_results
-from app.sources.tavily import search_tavily
-from app.sources.wikipedia import search_wikipedia
-
+from app.sources.base import SearchSource
+from app.sources.tavily import TavilySource
+from app.sources.wikipedia import WikipediaSource
 
 SOURCE_TIMEOUT = 5.0
 
+# Every source the app can use. Adding a source means adding it here.
+SOURCES: list[SearchSource] = [TavilySource(), WikipediaSource()]
 
-async def search_all(query: str) -> dict:
-    sources = ["tavily", "wikipedia"]
+
+async def search_all(query: str, sources: list[SearchSource] | None = None) -> dict:
+    # Tests pass fake sources; the app uses the real ones.
+    if sources is None:
+        sources = SOURCES
 
     responses = await asyncio.gather(
-        asyncio.wait_for(
-            search_tavily(query),
-            timeout=SOURCE_TIMEOUT,
-        ),
-        asyncio.wait_for(
-            search_wikipedia(query),
-            timeout=SOURCE_TIMEOUT,
-        ),
+        *(asyncio.wait_for(source.search(query), timeout=SOURCE_TIMEOUT) for source in sources),
         return_exceptions=True,
     )
 
@@ -29,15 +27,11 @@ async def search_all(query: str) -> dict:
 
     for source, response in zip(sources, responses):
         if isinstance(response, Exception):
-            failed_sources.append(source)
+            failed_sources.append(source.name)
             continue
 
         for rank, result in enumerate(response, start=1):
-            results.append({
-                **result,
-                "source": source,
-                "rank": rank,
-            })
+            results.append({**result.model_dump(), "rank": rank})
 
     if len(failed_sources) == len(sources):
         raise RuntimeError("All search sources failed.")

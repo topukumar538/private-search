@@ -1,0 +1,107 @@
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from app.sources.tavily import TavilySource
+
+
+@pytest.fixture
+def api_key(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+
+
+def fake_tavily(payload, status=200, seen=None):
+    """A fake network that answers every request with the given JSON."""
+
+    def handler(request):
+        if seen is not None:
+            seen.append(request)
+        return httpx.Response(status, json=payload)
+
+    return TavilySource(transport=httpx.MockTransport(handler))
+
+
+def result(title="Python", url="https://python.org", content="A language"):
+    return {"title": title, "url": url, "content": content}
+
+
+# ---------- normal cases ----------
+
+def test_returns_results(api_key):
+    source = fake_tavily({"results": [result()]})
+
+    results = asyncio.run(source.search("python"))
+
+    assert len(results) == 1
+    assert results[0].title == "Python"
+    assert results[0].url == "https://python.org"
+    assert results[0].snippet == "A language"
+    assert results[0].source == "tavily"
+
+
+def test_sends_key_and_query(api_key):
+    seen = []
+    source = fake_tavily({"results": []}, seen=seen)
+
+    asyncio.run(source.search("rust language"))
+
+    request = seen[0]
+    body = json.loads(request.content)
+    assert request.headers["Authorization"] == "Bearer test-key"
+    assert body["query"] == "rust language"
+    assert body["include_answer"] is False
+
+
+# ---------- edge cases ----------
+
+def test_item_without_title_is_skipped_not_fatal(api_key):
+    # The old code used item["title"] and crashed the whole source here.
+    source = fake_tavily({"results": [
+        result(title="Good 1"),
+        {"url": "https://example.com/no-title", "content": "x"},
+        result(title="Good 2"),
+    ]})
+
+    results = asyncio.run(source.search("python"))
+
+    assert [r.title for r in results] == ["Good 1", "Good 2"]
+
+
+def test_missing_content_becomes_empty_snippet(api_key):
+    source = fake_tavily({"results": [{"title": "T", "url": "https://example.com"}]})
+
+    results = asyncio.run(source.search("x"))
+
+    assert results[0].snippet == ""
+
+
+def test_unsafe_url_is_skipped(api_key):
+    source = fake_tavily({"results": [result(url="javascript:alert(1)")]})
+
+    assert asyncio.run(source.search("x")) == []
+
+
+def test_missing_results_key_gives_empty_list(api_key):
+    assert asyncio.run(fake_tavily({}).search("x")) == []
+
+
+# ---------- failure cases ----------
+
+def test_missing_api_key_raises_before_any_request(monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    seen = []
+    source = fake_tavily({"results": []}, seen=seen)
+
+    with pytest.raises(RuntimeError, match="TAVILY_API_KEY"):
+        asyncio.run(source.search("python"))
+
+    assert seen == []
+
+
+def test_http_error_raises(api_key):
+    source = fake_tavily({}, status=401)
+
+    with pytest.raises(RuntimeError, match="401"):
+        asyncio.run(source.search("python"))
