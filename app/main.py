@@ -6,7 +6,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.services.http_client import create_http_client
+from app.services.logging_config import configure_logging
 from app.services.search import search_all
+
+configure_logging()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
