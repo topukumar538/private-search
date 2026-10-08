@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+
+  <title>Private Search</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 750px;
+      margin: 60px auto;
+      padding: 0 20px;
+      color: #222;
+    }
+
+    form {
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 12px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 12px 20px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+
+    article {
+      margin: 25px 0;
+      overflow-wrap: anywhere;
+    }
+
+    article a {
+      font-size: 20px;
+    }
+
+    article p {
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .result-sources {
+      display: block;
+      margin-top: 6px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Private Search</h1>
+
+  <form id="search-form" autocomplete="off">
+    <input
+      id="query"
+      type="search"
+      placeholder="Search the web..."
+      aria-label="Search query"
+      maxlength="500"
+      autocomplete="off"
+      required
+    >
+
+    <button id="search-button" type="submit">
+      Search
+    </button>
+  </form>
+
+  <p id="status" role="status"></p>
+  <div id="results"></div>
+
+  <script>
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("query");
+    const button = document.getElementById("search-button");
+    const status = document.getElementById("status");
+    const resultsContainer = document.getElementById("results");
+
+    let isSearching = false;
+    let activeController = null;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (isSearching) {
+        return;
+      }
+
+      const query = input.value.trim();
+
+      if (!query) {
+        status.textContent = "Please enter a search query.";
+        return;
+      }
+
+      const controller = new AbortController();
+      activeController = controller;
+
+      isSearching = true;
+      button.disabled = true;
+      input.disabled = true;
+      button.textContent = "Searching...";
+
+      status.textContent = "Searching...";
+      resultsContainer.replaceChildren();
+
+      try {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          cache: "no-store",
+          signal: controller.signal,
+          body: JSON.stringify({ query: query })
+        });
+
+        const data = await response.json();
+
+        // Ignore responses from a search cleared by navigation.
+        if (activeController !== controller) {
+          return;
+        }
+
+        if (!response.ok) {
+          const message = typeof data.detail === "string"
+            ? data.detail
+            : "Search failed. Please check your query.";
+
+          throw new Error(message);
+        }
+
+        if (!Array.isArray(data.results)) {
+          throw new Error("The server returned an invalid response.");
+        }
+
+        let displayedCount = 0;
+
+        for (const result of data.results) {
+          if (!result || typeof result.url !== "string") {
+            continue;
+          }
+
+          let url;
+
+          try {
+            url = new URL(result.url);
+          } catch {
+            continue;
+          }
+
+          // Allow only web links without embedded credentials.
+          if (
+            !["http:", "https:"].includes(url.protocol) ||
+            url.username ||
+            url.password
+          ) {
+            continue;
+          }
+
+          const article = document.createElement("article");
+          const link = document.createElement("a");
+          const sources = document.createElement("small");
+          const snippet = document.createElement("p");
+
+          link.href = url.href;
+          link.textContent = result.title || url.hostname;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+
+          const sourceNames = Array.isArray(result.sources)
+            ? result.sources
+            : [];
+
+          sources.className = "result-sources";
+          sources.textContent = sourceNames.length
+            ? `Sources: ${sourceNames.join(", ")}`
+            : "Source unavailable";
+
+          // Provider content is displayed as text, never HTML.
+          snippet.textContent = result.snippet || "";
+
+          article.append(link, sources, snippet);
+          resultsContainer.append(article);
+
+          displayedCount++;
+        }
+
+        status.textContent = displayedCount
+          ? `${displayedCount} results`
+          : "No results found.";
+
+        if (data.partial) {
+          status.textContent +=
+            " Some sources were unavailable; results may be incomplete.";
+        }
+      } catch (error) {
+        if (
+          activeController === controller &&
+          error.name !== "AbortError"
+        ) {
+          status.textContent =
+            "Unable to complete the search. Please try again.";
+
+          if (error instanceof Error && error.name === "Error") {
+            status.textContent = error.message;
+          }
+        }
+      } finally {
+        // An older request must not change a newer search's controls.
+        if (activeController === controller) {
+          activeController = null;
+          isSearching = false;
+
+          button.disabled = false;
+          input.disabled = false;
+          button.textContent = "Search";
+
+          input.focus();
+        }
+      }
+    });
+
+    function resetSearchPage() {
+      if (activeController) {
+        activeController.abort();
+        activeController = null;
+      }
+
+      isSearching = false;
+
+      form.reset();
+      input.value = "";
+
+      resultsContainer.replaceChildren();
+      status.textContent = "";
+
+      button.disabled = false;
+      input.disabled = false;
+      button.textContent = "Search";
+    }
+
+    window.addEventListener("pagehide", resetSearchPage);
+    window.addEventListener("pageshow", resetSearchPage);
+  </script>
+</body>
+</html>
