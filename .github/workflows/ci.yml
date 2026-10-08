@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          else
+            pip install -r requirements.txt
+          fi
+
+      - name: Run tests
+        run: python -m pytest -v
+
+  docker:
+    name: Build and check Docker image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t private-search .
+
+      - name: Check that secrets and tests are not in the image
+        run: docker run --rm private-search sh -c 'test ! -e .env && test ! -e tests'
+
+      - name: Start the app and check /health
+        run: |
+          docker run -d --name app -p 7860:7860 private-search
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:7860/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "App did not become healthy in time."
+          docker logs app
+          exit 1
