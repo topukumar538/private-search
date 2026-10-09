@@ -4,133 +4,1042 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="A metasearch engine that searches for you without passing on who you are.">
 
   <title>Private Search</title>
 
+  <!-- Inline icon, so the browser never requests /favicon.ico. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232F5BD3'/%3E%3Ccircle cx='14' cy='14' r='6.5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+
   <style>
+    /* System fonts only: loading a web font would send every visitor's
+       IP address to the font host. */
+    :root {
+      --bg: #FFFFFF;
+      --surface: #FFFFFF;
+      --raised: #F6F8FB;
+      --ink: #1F1F1F;
+      --muted: #5F6368;
+      --faint: #70757A;
+      --line: #DADCE0;
+      --line-soft: #EBEDF0;
+      --brand: #2F5BD3;
+      --link: #1A0DAB;
+      --visited: #681DA8;
+      --safe: #188038;
+      --safe-soft: #E6F4EA;
+      --warn: #8A5300;
+      --warn-soft: #FEF3E0;
+      --chip: #EEF2FA;
+      --shadow: 0 1px 6px rgba(32, 33, 36, 0.18);
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1F1F1F;
+        --surface: #303134;
+        --raised: #28292A;
+        --ink: #E8EAED;
+        --muted: #BDC1C6;
+        --faint: #9AA0A6;
+        --line: #5F6368;
+        --line-soft: #3C4043;
+        --brand: #8AB4F8;
+        --link: #99C3FF;
+        --visited: #C58AF9;
+        --safe: #81C995;
+        --safe-soft: #233428;
+        --warn: #FDD663;
+        --warn-soft: #3A3220;
+        --chip: #303134;
+        --shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      max-width: 750px;
-      margin: 60px auto;
-      padding: 0 20px;
-      color: #222;
-    }
-
-    form {
+      margin: 0;
       display: flex;
-      gap: 10px;
-    }
-
-    input {
-      flex: 1;
-      min-width: 0;
-      padding: 12px;
-      font-size: 16px;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.58;
+      -webkit-font-smoothing: antialiased;
     }
 
     button {
-      padding: 12px 20px;
+      font: inherit;
+      color: inherit;
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    /* ---------- Logo ---------- */
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .logo-mark {
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 28%;
+      background: var(--brand);
+      color: #FFFFFF;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .logo-mark {
+        color: #1F1F1F;
+      }
+    }
+
+    .logo-word span {
+      color: var(--brand);
+    }
+
+    /* ---------- Search box (shared by both layouts) ---------- */
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      transition: box-shadow 120ms ease, border-color 120ms ease;
+    }
+
+    .search-box:hover,
+    .search-box:focus-within {
+      border-color: transparent;
+      box-shadow: var(--shadow);
+    }
+
+    .search-icon {
+      flex: none;
+      margin-left: 16px;
+      color: var(--faint);
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 0;
+      height: 46px;
+      padding: 0 12px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 16px;
+    }
+
+    .search-input:focus {
+      outline: none;
+    }
+
+    .search-input::-webkit-search-cancel-button {
+      display: none;
+    }
+
+    .clear-button {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      margin-right: 4px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--faint);
       cursor: pointer;
     }
 
-    button:disabled {
-      cursor: wait;
-      opacity: 0.6;
+    .clear-button:hover {
+      color: var(--ink);
     }
 
-    article {
-      margin: 25px 0;
+    .submit-icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      margin-right: 2px;
+      border: 0;
+      border-left: 1px solid var(--line-soft);
+      border-radius: 0 22px 22px 0;
+      background: transparent;
+      color: var(--brand);
+      cursor: pointer;
+    }
+
+    /* ---------- Home layout ---------- */
+
+    .home {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px 12vh;
+    }
+
+    .home .logo {
+      gap: 14px;
+      font-size: clamp(2.2rem, 7vw, 3.4rem);
+    }
+
+    .home .logo-mark {
+      width: 1.15em;
+      height: 1.15em;
+    }
+
+    .home .logo-mark svg {
+      width: 0.62em;
+      height: 0.62em;
+    }
+
+    .home-form {
+      width: 100%;
+      max-width: 584px;
+      margin-top: 28px;
+    }
+
+    .home .submit-icon {
+      display: none;
+    }
+
+    .home-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .pill-button {
+      padding: 0 16px;
+      height: 36px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: var(--raised);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .pill-button:hover {
+      border-color: var(--line);
+    }
+
+    .home-promise {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 28px 0 0;
+      color: var(--muted);
+    }
+
+    .home-promise svg {
+      color: var(--safe);
+    }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      max-width: 584px;
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .example {
+      padding: 6px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .example:hover {
+      color: var(--ink);
+      border-color: var(--faint);
+    }
+
+    /* ---------- Results layout ---------- */
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      padding: 18px 24px 14px;
+    }
+
+    .topbar .logo {
+      font-size: 1.35rem;
+    }
+
+    .topbar .logo-mark {
+      width: 30px;
+      height: 30px;
+    }
+
+    .topbar-form {
+      flex: 1;
+      max-width: 692px;
+    }
+
+    .topbar-tabs {
+      display: flex;
+      gap: 24px;
+      padding: 0 24px 0 calc(24px + var(--logo-offset, 0px));
+      font-size: 13px;
+    }
+
+    .tab {
+      padding: 6px 2px 10px;
+      border-bottom: 3px solid transparent;
+      color: var(--muted);
+    }
+
+    .tab[aria-current="page"] {
+      border-bottom-color: var(--brand);
+      color: var(--brand);
+      font-weight: 600;
+    }
+
+    .results-page {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 652px) minmax(0, 368px);
+      gap: 64px;
+      padding: 16px 24px 48px calc(24px + var(--logo-offset, 0px));
+    }
+
+    .stats {
+      margin: 0 0 16px;
+      color: var(--faint);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .notice {
+      margin: 0 0 20px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .results {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .result {
+      margin-bottom: 28px;
       overflow-wrap: anywhere;
     }
 
-    article a {
-      font-size: 20px;
+    .result-site {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
     }
 
-    article p {
-      line-height: 1.5;
-      white-space: pre-wrap;
+    .site-badge {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line-soft);
+      border-radius: 50%;
+      background: var(--raised);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .site-text {
+      min-width: 0;
+      line-height: 1.3;
+    }
+
+    .site-name {
+      display: block;
+      color: var(--ink);
+    }
+
+    .site-path {
+      display: block;
+      overflow: hidden;
+      color: var(--faint);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .result-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.3;
+    }
+
+    .result-title a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    .result-title a:visited {
+      color: var(--visited);
+    }
+
+    .result-title a:hover {
+      text-decoration: underline;
+    }
+
+    .result-snippet {
+      margin: 4px 0 0;
+      color: var(--muted);
     }
 
     .result-sources {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+    }
+
+    .source-tag {
+      padding: 1px 8px;
+      border-radius: 4px;
+      background: var(--chip);
+      color: var(--muted);
+    }
+
+    .agreement {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--safe);
+      font-weight: 600;
+    }
+
+    .no-results h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 400;
+    }
+
+    .no-results ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    /* ---------- Privacy panel (right column) ---------- */
+
+    .panel {
+      align-self: start;
+      position: sticky;
+      top: 120px;
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      background: var(--bg);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 20px 14px;
+    }
+
+    .panel-icon {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--safe-soft);
+      color: var(--safe);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1.3;
+    }
+
+    .panel-sub {
+      margin: 0;
+      color: var(--faint);
+      font-size: 13px;
+    }
+
+    .panel-rows {
+      margin: 0;
+      padding: 0 20px;
+    }
+
+    .panel-row {
+      padding: 12px 0;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .panel-row dt {
+      margin-bottom: 2px;
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .panel-row dd {
+      margin: 0;
+    }
+
+    .kept {
+      color: var(--safe);
+      font-weight: 600;
+    }
+
+    .panel-foot {
+      margin: 0;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line-soft);
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    /* ---------- Loading ---------- */
+
+    .skeleton {
+      margin-bottom: 30px;
+    }
+
+    .skeleton span {
       display: block;
-      margin-top: 6px;
-      color: #666;
+      height: 12px;
+      margin-top: 10px;
+      border-radius: 4px;
+      background: var(--line-soft);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    .skeleton span:first-child { width: 28%; margin-top: 0; }
+    .skeleton span:nth-child(2) { width: 60%; height: 18px; }
+    .skeleton span:nth-child(3) { width: 92%; }
+    .skeleton span:nth-child(4) { width: 75%; }
+
+    @keyframes pulse {
+      50% { opacity: 0.4; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .skeleton span { animation: none; }
+      .search-box { transition: none; }
+    }
+
+    /* ---------- Footer ---------- */
+
+    .footer {
+      background: var(--raised);
+      border-top: 1px solid var(--line-soft);
+      color: var(--faint);
+    }
+
+    .footer p {
+      margin: 0;
+      padding: 14px 24px;
+    }
+
+    /* ---------- Responsive ---------- */
+
+    @media (min-width: 1100px) {
+      /* Line results up under the search box, as big engines do. */
+      :root {
+        --logo-offset: 214px;
+      }
+
+      .topbar-inner {
+        padding-left: 24px;
+      }
+
+      .topbar .logo {
+        width: 186px;
+      }
+    }
+
+    @media (max-width: 1099px) {
+      .results-page {
+        grid-template-columns: minmax(0, 652px);
+        gap: 0;
+      }
+
+      .panel {
+        position: static;
+        margin-top: 8px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .topbar-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 14px 16px 12px;
+      }
+
+      .topbar .logo {
+        align-self: center;
+      }
+
+      .topbar-tabs {
+        padding: 0 16px;
+      }
+
+      .results-page {
+        padding: 12px 16px 40px;
+      }
+
+      .result-title {
+        font-size: 18px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>Private Search</h1>
+  <!-- ===================== Home ===================== -->
+  <main id="home" class="home">
+    <a class="logo" href="/" aria-label="Private Search home">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+      </span>
+      <span class="logo-word">Private <span>Search</span></span>
+    </a>
 
-  <form id="search-form" autocomplete="off">
-    <input
-      id="query"
-      type="search"
-      placeholder="Search the web..."
-      aria-label="Search query"
-      maxlength="500"
-      autocomplete="off"
-      required
-    >
+    <form id="home-form" class="home-form" role="search" autocomplete="off">
+      <div class="search-box">
+        <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <label class="visually-hidden" for="home-query">Search the web</label>
+        <input id="home-query" class="search-input" type="search" maxlength="500" autocomplete="off" spellcheck="false" autofocus>
+        <button class="clear-button" type="button" aria-label="Clear search" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="submit-icon" type="submit" aria-label="Search">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
 
-    <button id="search-button" type="submit">
-      Search
-    </button>
-  </form>
+      <div class="home-actions">
+        <button class="pill-button" type="submit">Search privately</button>
+      </div>
+    </form>
 
-  <p id="status" role="status"></p>
-  <div id="results"></div>
+    <p class="home-promise">
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Search engines see your question, never who asked it.
+    </p>
+
+    <ul class="examples" aria-label="Example searches">
+      <li><button class="example" type="button">how does TLS encryption work</button></li>
+      <li><button class="example" type="button">python asyncio gather</button></li>
+      <li><button class="example" type="button">history of the printing press</button></li>
+    </ul>
+  </main>
+
+  <!-- ===================== Results ===================== -->
+  <header id="topbar" class="topbar" hidden>
+    <div class="topbar-inner">
+      <a class="logo" href="/" aria-label="Private Search home">
+        <span class="logo-mark" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="3"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        </span>
+        <span class="logo-word">Private <span>Search</span></span>
+      </a>
+
+      <form id="top-form" class="topbar-form" role="search" autocomplete="off">
+        <div class="search-box">
+          <label class="visually-hidden" for="top-query">Search the web</label>
+          <input id="top-query" class="search-input" type="search" maxlength="500" autocomplete="off" spellcheck="false" style="padding-left: 20px">
+          <button class="clear-button" type="button" aria-label="Clear search" hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button class="submit-icon" type="submit" aria-label="Search">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <nav class="topbar-tabs" aria-label="Result types">
+      <span class="tab" aria-current="page">All</span>
+    </nav>
+  </header>
+
+  <div id="results-page" class="results-page" hidden>
+    <section aria-label="Search results">
+      <p id="stats" class="stats" role="status" aria-live="polite"></p>
+      <p id="notice" class="notice" hidden></p>
+
+      <div id="loading" hidden aria-hidden="true">
+        <div class="skeleton"><span></span><span></span><span></span><span></span></div>
+        <div class="skeleton"><span></span><span></span><span></span><span></span></div>
+        <div class="skeleton"><span></span><span></span><span></span><span></span></div>
+      </div>
+
+      <div id="no-results" class="no-results" hidden>
+        <h2>No results for that search.</h2>
+        <ul>
+          <li>Check the spelling.</li>
+          <li>Try fewer or more general words.</li>
+        </ul>
+      </div>
+
+      <ol id="results" class="results"></ol>
+    </section>
+
+    <aside id="panel" class="panel" aria-label="Privacy for this search" hidden>
+      <div class="panel-head">
+        <span class="panel-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div>
+          <h2 class="panel-title">Privacy for this search</h2>
+          <p class="panel-sub">What left this server, and what didn't</p>
+        </div>
+      </div>
+
+      <dl class="panel-rows">
+        <div class="panel-row">
+          <dt>Asked</dt>
+          <dd id="panel-asked"></dd>
+        </div>
+        <div class="panel-row">
+          <dt>What they saw</dt>
+          <dd>Your search words, as typed, coming from this server.</dd>
+        </div>
+        <div class="panel-row">
+          <dt>Kept back</dt>
+          <dd class="kept">Your IP address, cookies and browser details.</dd>
+        </div>
+        <div class="panel-row">
+          <dt>Written to logs</dt>
+          <dd>Which engines answered and how fast. Never your search words.</dd>
+        </div>
+      </dl>
+
+      <p class="panel-foot">
+        Opening a result connects your browser directly to that website, so that site can see your IP address.
+      </p>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <p>No accounts, no cookies, no tracking scripts. Nothing on this page loads from another website.</p>
+  </footer>
 
   <script>
-    const form = document.getElementById("search-form");
-    const input = document.getElementById("query");
-    const button = document.getElementById("search-button");
-    const status = document.getElementById("status");
-    const resultsContainer = document.getElementById("results");
+    const home = document.getElementById("home");
+    const homeForm = document.getElementById("home-form");
+    const homeInput = document.getElementById("home-query");
+    const topbar = document.getElementById("topbar");
+    const topForm = document.getElementById("top-form");
+    const topInput = document.getElementById("top-query");
+    const resultsPage = document.getElementById("results-page");
+    const stats = document.getElementById("stats");
+    const notice = document.getElementById("notice");
+    const loading = document.getElementById("loading");
+    const noResults = document.getElementById("no-results");
+    const resultsList = document.getElementById("results");
+    const panel = document.getElementById("panel");
+    const panelAsked = document.getElementById("panel-asked");
 
-    let isSearching = false;
+    const SOURCE_NAMES = {
+      tavily: "Tavily",
+      wikipedia: "Wikipedia",
+    };
+
     let activeController = null;
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    // ---------- small helpers ----------
 
-      if (isSearching) {
-        return;
+    function sourceLabel(name) {
+      if (typeof name !== "string" || !name) {
+        return "Unknown";
       }
 
-      const query = input.value.trim();
+      return SOURCE_NAMES[name] || name.charAt(0).toUpperCase() + name.slice(1);
+    }
 
-      if (!query) {
-        status.textContent = "Please enter a search query.";
-        return;
+    function joinNames(names) {
+      const labels = names.map(sourceLabel);
+
+      if (labels.length <= 1) {
+        return labels.join("");
+      }
+
+      return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+    }
+
+    function safeWebUrl(value) {
+      if (typeof value !== "string") {
+        return null;
+      }
+
+      let url;
+
+      try {
+        url = new URL(value);
+      } catch {
+        return null;
+      }
+
+      // Allow only web links without embedded credentials.
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+        return null;
+      }
+
+      return url;
+    }
+
+    function readablePath(url) {
+      const parts = url.pathname
+        .split("/")
+        .filter(Boolean)
+        .map((part) => {
+          try {
+            return decodeURIComponent(part);
+          } catch {
+            return part;
+          }
+        });
+
+      return parts.length ? `› ${parts.join(" › ")}` : "";
+    }
+
+    function siteInitial(host) {
+      // "en.wikipedia.org" -> "W", "www.cloudflare.com" -> "C"
+      const labels = host.split(".");
+      const main = labels.length > 1 ? labels[labels.length - 2] : labels[0];
+      return main.charAt(0);
+    }
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.hidden = !message;
+    }
+
+    function showResultsLayout() {
+      home.hidden = true;
+      topbar.hidden = false;
+      resultsPage.hidden = false;
+    }
+
+    function showHomeLayout() {
+      home.hidden = false;
+      topbar.hidden = true;
+      resultsPage.hidden = true;
+    }
+
+    function setBusy(busy) {
+      loading.hidden = !busy;
+
+      for (const button of document.querySelectorAll('button[type="submit"]')) {
+        button.disabled = busy;
+      }
+    }
+
+    function syncClearButtons() {
+      for (const input of [homeInput, topInput]) {
+        input.parentElement.querySelector(".clear-button").hidden = !input.value;
+      }
+    }
+
+    // ---------- rendering ----------
+
+    function renderResult(result) {
+      const url = safeWebUrl(result && result.url);
+
+      if (!url) {
+        return null;
+      }
+
+      const host = url.hostname.replace(/^www\./, "");
+
+      const item = document.createElement("li");
+      item.className = "result";
+
+      const site = document.createElement("div");
+      site.className = "result-site";
+
+      // A letter badge instead of a real favicon: fetching favicons would
+      // tell each site (or a favicon service) what you searched for.
+      const badge = document.createElement("span");
+      badge.className = "site-badge";
+      badge.setAttribute("aria-hidden", "true");
+      badge.textContent = siteInitial(host);
+
+      const siteText = document.createElement("span");
+      siteText.className = "site-text";
+
+      const siteName = document.createElement("span");
+      siteName.className = "site-name";
+      siteName.textContent = host;
+
+      siteText.append(siteName);
+
+      const path = readablePath(url);
+
+      if (path) {
+        const sitePath = document.createElement("span");
+        sitePath.className = "site-path";
+        sitePath.textContent = path;
+        siteText.append(sitePath);
+      }
+      site.append(badge, siteText);
+
+      const title = document.createElement("h3");
+      title.className = "result-title";
+
+      const link = document.createElement("a");
+      link.href = url.href;
+      link.textContent = result.title || host;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      title.append(link);
+
+      item.append(site, title);
+
+      // Provider content is displayed as text, never as HTML.
+      if (typeof result.snippet === "string" && result.snippet.trim()) {
+        const snippet = document.createElement("p");
+        snippet.className = "result-snippet";
+        snippet.textContent = result.snippet;
+        item.append(snippet);
+      }
+
+      const sources = Array.isArray(result.sources) ? result.sources : [];
+
+      if (sources.length) {
+        const tags = document.createElement("ul");
+        tags.className = "result-sources";
+        tags.setAttribute("aria-label", `Found by ${joinNames(sources)}`);
+
+        for (const name of sources) {
+          const tag = document.createElement("li");
+          tag.className = "source-tag";
+          tag.textContent = sourceLabel(name);
+          tags.append(tag);
+        }
+
+        if (sources.length > 1) {
+          const agreement = document.createElement("li");
+          agreement.className = "agreement";
+          agreement.textContent = "✓ Found by more than one engine";
+          tags.append(agreement);
+        }
+
+        item.append(tags);
+      }
+
+      return item;
+    }
+
+    // ---------- searching ----------
+
+    async function runSearch(query) {
+      // A new search replaces any search still in progress.
+      if (activeController) {
+        activeController.abort();
       }
 
       const controller = new AbortController();
       activeController = controller;
+      const started = performance.now();
 
-      isSearching = true;
-      button.disabled = true;
-      input.disabled = true;
-      button.textContent = "Searching...";
+      homeInput.value = query;
+      topInput.value = query;
+      syncClearButtons();
+      showResultsLayout();
 
-      status.textContent = "Searching...";
-      resultsContainer.replaceChildren();
+      panel.hidden = true;
+      noResults.hidden = true;
+      showNotice("");
+      resultsList.replaceChildren();
+      stats.textContent = "";
+      setBusy(true);
+      window.scrollTo(0, 0);
 
       try {
         const response = await fetch("/api/search", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           cache: "no-store",
           signal: controller.signal,
-          body: JSON.stringify({ query: query })
+          body: JSON.stringify({ query }),
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
-        // Ignore responses from a search cleared by navigation.
+        // Ignore answers to a search that has since been replaced.
         if (activeController !== controller) {
           return;
         }
@@ -138,119 +1047,137 @@
         if (!response.ok) {
           const message = typeof data.detail === "string"
             ? data.detail
-            : "Search failed. Please check your query.";
-
+            : "That search could not be completed. Check your query and try again.";
           throw new Error(message);
         }
 
         if (!Array.isArray(data.results)) {
-          throw new Error("The server returned an invalid response.");
+          throw new Error("The server sent a response this page cannot read. Try again.");
         }
 
-        let displayedCount = 0;
+        let shown = 0;
 
         for (const result of data.results) {
-          if (!result || typeof result.url !== "string") {
-            continue;
+          const item = renderResult(result);
+
+          if (item) {
+            resultsList.append(item);
+            shown++;
           }
-
-          let url;
-
-          try {
-            url = new URL(result.url);
-          } catch {
-            continue;
-          }
-
-          // Allow only web links without embedded credentials.
-          if (
-            !["http:", "https:"].includes(url.protocol) ||
-            url.username ||
-            url.password
-          ) {
-            continue;
-          }
-
-          const article = document.createElement("article");
-          const link = document.createElement("a");
-          const sources = document.createElement("small");
-          const snippet = document.createElement("p");
-
-          link.href = url.href;
-          link.textContent = result.title || url.hostname;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-
-          const sourceNames = Array.isArray(result.sources)
-            ? result.sources
-            : [];
-
-          sources.className = "result-sources";
-          sources.textContent = sourceNames.length
-            ? `Sources: ${sourceNames.join(", ")}`
-            : "Source unavailable";
-
-          // Provider content is displayed as text, never HTML.
-          snippet.textContent = result.snippet || "";
-
-          article.append(link, sources, snippet);
-          resultsContainer.append(article);
-
-          displayedCount++;
         }
 
-        status.textContent = displayedCount
-          ? `${displayedCount} results`
-          : "No results found.";
+        const seconds = ((performance.now() - started) / 1000).toFixed(2);
 
-        if (data.partial) {
-          status.textContent +=
-            " Some sources were unavailable; results may be incomplete.";
+        if (shown) {
+          stats.textContent = `About ${shown} ${shown === 1 ? "result" : "results"} (${seconds} seconds)`;
+        } else {
+          noResults.hidden = false;
+        }
+
+        const failed = Array.isArray(data.failed_sources) ? data.failed_sources : [];
+
+        if (failed.length) {
+          showNotice(`${joinNames(failed)} did not respond, so some results may be missing.`);
+        }
+
+        const asked = Array.isArray(data.sources_asked) ? data.sources_asked : [];
+
+        if (asked.length) {
+          panelAsked.textContent = joinNames(asked);
+          panel.hidden = false;
         }
       } catch (error) {
-        if (
-          activeController === controller &&
-          error.name !== "AbortError"
-        ) {
-          status.textContent =
-            "Unable to complete the search. Please try again.";
-
-          if (error instanceof Error && error.name === "Error") {
-            status.textContent = error.message;
-          }
+        if (activeController !== controller || error.name === "AbortError") {
+          return;
         }
+
+        showNotice(error instanceof Error && error.message
+          ? error.message
+          : "That search could not be completed. Try again.");
       } finally {
         // An older request must not change a newer search's controls.
         if (activeController === controller) {
           activeController = null;
-          isSearching = false;
-
-          button.disabled = false;
-          input.disabled = false;
-          button.textContent = "Search";
-
-          input.focus();
+          setBusy(false);
         }
+      }
+    }
+
+    function submitFrom(input) {
+      return (event) => {
+        event.preventDefault();
+
+        const query = input.value.trim();
+
+        if (!query) {
+          input.focus();
+          return;
+        }
+
+        input.blur();
+        runSearch(query);
+      };
+    }
+
+    homeForm.addEventListener("submit", submitFrom(homeInput));
+    topForm.addEventListener("submit", submitFrom(topInput));
+
+    for (const input of [homeInput, topInput]) {
+      input.addEventListener("input", syncClearButtons);
+
+      input.parentElement.querySelector(".clear-button").addEventListener("click", () => {
+        input.value = "";
+        syncClearButtons();
+        input.focus();
+      });
+    }
+
+    for (const example of document.querySelectorAll(".example")) {
+      example.addEventListener("click", () => runSearch(example.textContent));
+    }
+
+    // The logo returns to the home page without reloading.
+    for (const logo of document.querySelectorAll(".logo")) {
+      logo.addEventListener("click", (event) => {
+        event.preventDefault();
+        resetSearchPage();
+        homeInput.focus();
+      });
+    }
+
+    // Press "/" to jump to the search box, unless already typing somewhere.
+    document.addEventListener("keydown", (event) => {
+      const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+
+      if (event.key === "/" && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        const input = home.hidden ? topInput : homeInput;
+        input.focus();
+        input.select();
       }
     });
 
+    // Clear everything when the page is left or restored from history,
+    // so the back button never reveals a previous search. The query is
+    // also never put in the address bar, so it stays out of history.
     function resetSearchPage() {
       if (activeController) {
         activeController.abort();
         activeController = null;
       }
 
-      isSearching = false;
-
-      form.reset();
-      input.value = "";
-
-      resultsContainer.replaceChildren();
-      status.textContent = "";
-
-      button.disabled = false;
-      input.disabled = false;
-      button.textContent = "Search";
+      homeForm.reset();
+      topForm.reset();
+      homeInput.value = "";
+      topInput.value = "";
+      syncClearButtons();
+      resultsList.replaceChildren();
+      stats.textContent = "";
+      showNotice("");
+      noResults.hidden = true;
+      panel.hidden = true;
+      setBusy(false);
+      showHomeLayout();
     }
 
     window.addEventListener("pagehide", resetSearchPage);

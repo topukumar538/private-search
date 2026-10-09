@@ -92,6 +92,7 @@ async def search_all(
     return {
         "results": results,
         "returned_count": len(results),
+        "sources_asked": [source.name for source in sources],
         "partial": bool(failed_sources),
         "failed_sources": failed_sources,
     }

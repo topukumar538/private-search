@@ -91,3 +91,15 @@ def test_http_error_raises(network, api_key):
 
     with pytest.raises(RuntimeError, match="401"):
         network.search(TavilySource())
+
+
+def test_long_markdown_content_becomes_a_short_clean_snippet(network, api_key):
+    content = "## How Does SSL/TLS Encryption Work? " + "It protects data in transit. " * 30
+    network.respond({"results": [result(content=content)]})
+
+    snippet = network.search(TavilySource())[0].snippet
+
+    assert snippet.startswith("How Does SSL/TLS Encryption Work?")
+    assert "##" not in snippet
+    assert snippet.endswith("…")
+    assert len(snippet) <= 281

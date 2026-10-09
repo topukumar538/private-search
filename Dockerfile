@@ -19,5 +19,7 @@ RUN pip install --user -r requirements.txt
 # Copy only the application code.
 COPY --chown=user app ./app
 
+# Hosts like Render choose the port through $PORT; 7860 is the default
+# that Hugging Face Spaces and local runs use.
 EXPOSE 7860
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]

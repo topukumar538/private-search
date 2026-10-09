@@ -4,6 +4,7 @@ import httpx
 from dotenv import load_dotenv
 
 from app.models import SearchResult
+from app.services.snippets import clean_snippet
 from app.sources.base import SearchSource
 
 load_dotenv()
@@ -47,12 +48,14 @@ class TavilySource(SearchSource):
             if not isinstance(item, dict):
                 continue
 
+            content = item.get("content")
+
             # .get() instead of item["title"]: a missing field now skips one
             # result instead of failing the whole source.
             items.append({
                 "title": item.get("title"),
                 "url": item.get("url"),
-                "snippet": item.get("content") or "",
+                "snippet": clean_snippet(content) if isinstance(content, str) else "",
             })
 
         return self.build_results(items)

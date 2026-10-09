@@ -102,3 +102,13 @@ def test_real_sources_are_registered_with_unique_names():
 
     assert names == ["tavily", "wikipedia"]
     assert len(names) == len(set(names))
+
+
+def test_response_lists_every_source_asked_even_if_it_found_nothing():
+    response = run([
+        make_source("a", ["https://one.com/"]),
+        make_source("b", []),
+        make_source("c", error=RuntimeError("down")),
+    ])
+
+    assert response["sources_asked"] == ["a", "b", "c"]

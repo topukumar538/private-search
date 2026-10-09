@@ -4,6 +4,7 @@ from urllib.parse import quote
 import httpx
 
 from app.models import SearchResult
+from app.services.snippets import clean_snippet
 from app.sources.base import SearchSource
 
 API_URL = "https://en.wikipedia.org/w/api.php"
@@ -70,7 +71,7 @@ class WikipediaSource(SearchSource):
             items.append({
                 "title": title,
                 "url": ARTICLE_URL + page,
-                "snippet": remove_html(snippet) if isinstance(snippet, str) else "",
+                "snippet": clean_snippet(remove_html(snippet)) if isinstance(snippet, str) else "",
             })
 
         return self.build_results(items)
