@@ -4,7 +4,7 @@
 
 A metasearch engine that queries several search providers at once, merges their results, and never passes on who is searching. Providers see the question, coming from this server; they never see the user's IP address, cookies or browser details, and the server never writes search words to its logs.
 
-**Live demo:** _link coming soon_ · **Status:** in active development (see [Roadmap](#roadmap))
+**Live demo:** https://private-search.onrender.com (free hosting: the first visit may take about a minute to wake up) · **Status:** in active development (see [Roadmap](#roadmap))
 
 ![Search results with the per-search privacy panel](docs/screenshot.png)
 
