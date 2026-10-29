@@ -125,7 +125,7 @@ docs/                   README screenshot
 - [x] URL normalization, deduplication and rank fusion
 - [x] Privacy-safe logging, tests and CI, Docker image
 - [x] Load test with automated capacity search
-- [ ] Prove that no user-identifying headers reach providers (request-level tests)
+- [x] Prove that no user-identifying headers reach providers (request-level tests)
 - [ ] More sources: Brave Search, Stack Exchange, GitHub, arXiv
 - [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [ ] Cache with request coalescing, rate limiting, per-source budgets and circuit breakers
