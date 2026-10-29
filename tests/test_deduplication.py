@@ -1,7 +1,6 @@
 import pytest
 
-from app.services.deduplication import normalize_url, remove_duplicates
-
+from app.services.deduplication import normalize_url, remove_duplicates, remove_tracking_parameters
 
 def make_result(url, source="tavily", rank=1):
     return {"title": "Example", "url": url, "source": source, "rank": rank}
@@ -149,3 +148,46 @@ def test_invalid_or_missing_urls_are_skipped_not_crashing():
 
 def test_empty_input_returns_empty_list():
     assert remove_duplicates([]) == []
+
+
+# ---- removing tracking parameters ---------
+def test_merged_result_shows_url_without_tracking_parameters():
+    results = [
+        make_result("https://example.com/a?id=42&utm_source=newsletter&gclid=abc", source="tavily"),
+        make_result("https://example.com/a?id=42", source="wikipedia"),
+    ]
+
+    merged = remove_duplicates(results)
+
+    assert merged[0]["url"] == "https://example.com/a?id=42"
+
+
+def test_removes_tracking_but_keeps_other_parameters_in_order():
+    url = "https://example.com/a?id=42&utm_source=x&b=2"
+    assert remove_tracking_parameters(url) == "https://example.com/a?id=42&b=2"
+
+
+def test_url_with_only_tracking_parameters_has_no_leftover_question_mark():
+    url = "https://example.com/?utm_source=x"
+    assert remove_tracking_parameters(url) == "https://example.com/"
+
+
+def test_uppercase_tracking_names_are_removed():
+    url = "https://example.com/a?id=1&UTM_Source=x"
+    assert remove_tracking_parameters(url) == "https://example.com/a?id=1"
+
+
+def test_fragment_is_kept():
+    url = "https://example.com/a?utm_source=x#section"
+    assert remove_tracking_parameters(url) == "https://example.com/a#section"
+
+
+def test_url_without_query_is_unchanged():
+    url = "https://example.com/a"
+    assert remove_tracking_parameters(url) == "https://example.com/a"
+
+
+def test_host_case_and_port_are_not_changed():
+    # Unlike normalize_url, this function must not rewrite anything else.
+    url = "https://Example.com:443/A?b=2"
+    assert remove_tracking_parameters(url) == "https://Example.com:443/A?b=2"

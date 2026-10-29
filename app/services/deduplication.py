@@ -32,6 +32,22 @@ def normalize_percent_encoding(value: str) -> str:
     return re.sub(r"%[0-9a-fA-F]{2}", replace, value)
 
 
+def strip_tracking_query(query: str) -> str:
+    """Remove tracking parameters from a query string.
+
+    Keeps every other parameter, in its original order and encoding.
+    """
+    kept = []
+
+    for parameter in query.split("&"):
+        name = unquote_plus(parameter.split("=", 1)[0])
+
+        if name.lower() not in TRACKING_PARAMETERS:
+            kept.append(parameter)
+
+    return "&".join(kept)
+
+
 def normalize_url(url: str) -> str:
     parts = urlsplit(url)
 
@@ -61,16 +77,7 @@ def normalize_url(url: str) -> str:
     if port is not None and not is_default_port:
         netloc = f"{hostname}:{port}"
 
-    # Preserve parameter order and original encoding.
-    query_parts = []
-
-    for parameter in parts.query.split("&"):
-        name = unquote_plus(parameter.split("=", 1)[0])
-
-        if name.lower() not in TRACKING_PARAMETERS:
-            query_parts.append(parameter)
-
-    query = "&".join(query_parts)
+    query = strip_tracking_query(parts.query)
     path = normalize_percent_encoding(parts.path or "/")
 
     return urlunsplit((
@@ -80,6 +87,16 @@ def normalize_url(url: str) -> str:
         query,
         parts.fragment,
     ))
+
+
+def remove_tracking_parameters(url: str) -> str:
+    """Return the same URL with tracking parameters removed.
+
+    Everything else stays exactly as it was: host, path, other
+    parameters and their order, and the fragment.
+    """
+    parts = urlsplit(url)
+    return urlunsplit(parts._replace(query=strip_tracking_query(parts.query)))
 
 
 def remove_duplicates(results: list[dict]) -> list[dict]:
@@ -102,6 +119,7 @@ def remove_duplicates(results: list[dict]) -> list[dict]:
         if key not in unique_results:
             unique_results[key] = {
                 **result,
+                "url": remove_tracking_parameters(url),
                 "sources": [source],
                 "source_ranks": {source: rank},
             }
