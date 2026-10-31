@@ -129,7 +129,7 @@ Then open http://127.0.0.1:7860.
 ## Tests
 
 ```bash
-pip install pytest
+pip install -r requirements-dev.txt
 python -m pytest -v
 ```
 
