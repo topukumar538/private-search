@@ -9,6 +9,11 @@ API_URL = "https://api.stackexchange.com/2.3/search/advanced"
 MAX_RESULTS = 5
 
 
+def count(number: int, word: str) -> str:
+    """'1 answer', '2 answers', '0 answers'."""
+    return f"{number} {word}" if number == 1 else f"{number} {word}s"
+
+
 class StackExchangeSource(SearchSource):
     name = "stackoverflow"
 
@@ -50,16 +55,18 @@ class StackExchangeSource(SearchSource):
 
             # Stack Exchange sends no text, so describe the question instead.
             parts = [
-                f"{item.get('score', 0)} votes",
-                f"{item.get('answer_count', 0)} answers",
+                count(item.get("score", 0), "vote"),
+                count(item.get("answer_count", 0), "answer"),
             ]
 
             if "accepted_answer_id" in item:
                 parts.append("accepted answer")
 
-            tags = item.get("tags", [])
-            if tags:
-                parts.append(", ".join(tags))
+            tags = item.get("tags")
+            if isinstance(tags, list):
+                names = [tag for tag in tags if isinstance(tag, str)]
+                if names:
+                    parts.append(", ".join(names))
 
             items.append({
                 "title": title,

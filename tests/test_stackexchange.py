@@ -137,3 +137,22 @@ def test_invalid_json_raises(network):
 
     with pytest.raises(ValueError):
         network.search(StackExchangeSource())
+
+
+# ---------- search(): the network part ----------
+
+
+def test_one_vote_and_one_answer_are_singular():
+    results = parse(make_item(score=1, answer_count=1))
+
+    assert results[0].snippet.startswith("1 vote · 1 answer ·")
+
+
+def test_bad_tags_are_ignored_not_fatal():
+    results = parse(
+        make_item(tags=["python", None, 42]),
+        make_item(link="https://stackoverflow.com/questions/2", tags="python"),
+    )
+
+    assert results[0].snippet.endswith("accepted answer · python")
+    assert results[1].snippet.endswith("accepted answer")
