@@ -38,3 +38,8 @@ class FakeNetwork:
 @pytest.fixture
 def network():
     return FakeNetwork()
+
+@pytest.fixture(autouse=True)
+def contact_email(monkeypatch):
+    """Every test runs with a fake operator contact, never the real one."""
+    monkeypatch.setenv("CONTACT_EMAIL", "test@example.com")

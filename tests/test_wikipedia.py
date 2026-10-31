@@ -99,3 +99,15 @@ def test_invalid_json_raises(network):
 
     with pytest.raises(json.JSONDecodeError):
         network.search(WikipediaSource())
+
+
+
+
+
+def test_missing_contact_raises_before_sending(network, monkeypatch):
+    monkeypatch.delenv("CONTACT_EMAIL")
+
+    with pytest.raises(RuntimeError):
+        network.search(WikipediaSource())
+
+    assert network.requests == []

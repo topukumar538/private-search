@@ -49,9 +49,7 @@ class TavilySource(SearchSource):
                 continue
 
             content = item.get("content")
-
-            # .get() instead of item["title"]: a missing field now skips one
-            # result instead of failing the whole source.
+            
             items.append({
                 "title": item.get("title"),
                 "url": item.get("url"),

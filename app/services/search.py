@@ -10,6 +10,7 @@ from app.services.ranking import rank_results
 from app.sources.base import SearchSource
 from app.sources.tavily import TavilySource
 from app.sources.wikipedia import WikipediaSource
+from app.sources.stackexchange import StackExchangeSource
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 SOURCE_TIMEOUT = 5.0
 
 # Every source the app can use. Adding a source means adding it here.
-SOURCES: list[SearchSource] = [TavilySource(), WikipediaSource()]
+SOURCES: list[SearchSource] = [TavilySource(), WikipediaSource(), StackExchangeSource()]
 
 
 async def run_source(

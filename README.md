@@ -30,15 +30,29 @@ flowchart LR
 
 ## Privacy: what it protects, and what it doesn't
 
+**In one sentence:** search providers can't see who is searching, and the app keeps no record of searches or visitors.
+
 | | |
 |---|---|
 | **Search providers see** | The search words, as typed, coming from this server's IP address |
-| **Kept from providers** | The user's IP address, cookies and browser details |
-| **Server logs record** | Which providers answered, how fast, and error types. Never search words or error messages (which can contain URLs) |
-| **The page itself** | No cookies, accounts or tracking scripts; nothing is loaded from another website (system fonts, no favicon services) |
-| **Not protected** | Opening a result connects the user's browser directly to that website. With few users, providers see one busy client rather than a large crowd. Users must trust the server operator not to log. |
+| **Kept from providers** | The user's IP address, cookies and browser details (user agent, language, referring page) |
+| **Server logs record** | Which providers answered, how fast, and error types. Never search words, error messages (which can contain URLs) or visitors' IP addresses (uvicorn's access log is turned off) |
+| **Result links** | Tracking parameters (`utm_*`, `gclid`, `fbclid`) are removed, and no referrer is sent, so the site doesn't learn the visit came from here |
+| **The page itself** | No cookies, accounts or tracking scripts; nothing is loaded from another website |
 
-A test suite enforces the logging rules. While building it I found that `httpx` logs every request URL at INFO level by default, which would have written users' search words into the logs; the app silences it, and a test (with a negative control proving the test can detect a leak) keeps it that way.
+**Not protected:**
+- **Anything identifying typed into the query itself.** The query is forwarded exactly as typed, by design.
+- **Opening a result** connects the browser directly to that site, which sees the user's IP address. The privacy panel suggests an incognito window, which stops the site linking the visit to the user's accounts and cookies (a VPN is needed to hide the IP).
+- **Low traffic:** with few users, providers see one busy client rather than a large crowd.
+- **The server itself:** users must trust the operator not to log, the hosting platform may keep its own request logs, and a compromised server could watch live requests.
+
+### How the rules are enforced
+
+Privacy claims are backed by tests, so a future change can't quietly break them:
+
+- **Only the query leaves the server.** A test sends a search with fake user details (browser, cookies, language, IP headers), captures the outgoing request to the provider, and checks it against an **allowlist** of the only headers permitted to leave. Any other header fails the test, including leaks nobody thought of in advance.
+- **Logs never contain search words.** While building this I found that `httpx` logs every request URL at INFO level by default, which would have written users' search words into the logs. The app silences it, and a test (with a negative control proving the test can detect a leak) keeps it that way.
+- **Result links are cleaned.** Tests check that tracking parameters are removed from the links users click.
 
 ## Engineering highlights
 

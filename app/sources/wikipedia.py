@@ -1,16 +1,28 @@
+import os
 from html.parser import HTMLParser
 from urllib.parse import quote
 
 import httpx
+from dotenv import load_dotenv
 
 from app.models import SearchResult
 from app.services.snippets import clean_snippet
 from app.sources.base import SearchSource
 
+load_dotenv()
+
 API_URL = "https://en.wikipedia.org/w/api.php"
 ARTICLE_URL = "https://en.wikipedia.org/wiki/"
-USER_AGENT = "PrivateSearch/0.1 (Personal search project)"
 MAX_RESULTS = 5
+
+
+def user_agent() -> str:
+    contact = os.getenv("CONTACT_EMAIL")
+
+    if not contact:
+        raise RuntimeError("CONTACT_EMAIL is not set.")
+
+    return f"PrivateSearch/0.1 ({contact})"
 
 
 class TextExtractor(HTMLParser):
@@ -36,7 +48,7 @@ class WikipediaSource(SearchSource):
     async def search(self, query: str, client: httpx.AsyncClient) -> list[SearchResult]:
         response = await client.get(
             API_URL,
-            headers={"User-Agent": USER_AGENT},
+            headers={"User-Agent": user_agent()},
             params={
                 "action": "query",
                 "list": "search",

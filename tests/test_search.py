@@ -100,7 +100,7 @@ def test_source_returning_nothing_is_not_a_failure():
 def test_real_sources_are_registered_with_unique_names():
     names = [source.name for source in search_module.SOURCES]
 
-    assert names == ["tavily", "wikipedia"]
+    assert names == ["tavily", "wikipedia", "stackoverflow"]
     assert len(names) == len(set(names))
 
 
