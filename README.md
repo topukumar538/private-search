@@ -16,11 +16,19 @@ flowchart LR
     A --> O[Orchestrator]
     O -->|parallel, 5 s cap each| T[Tavily]
     O -->|parallel, 5 s cap each| W[Wikipedia]
+    O -->|parallel, 5 s cap each| S[Stack Overflow]
     T --> D[Deduplicate<br/>normalized URLs]
     W --> D
+    S --> D
     D --> R[Rank<br/>reciprocal rank fusion]
     R -->|results + privacy report| U
 ```
+
+| Source | Good for | Needs |
+|---|---|---|
+| **Tavily** | General web search | An API key |
+| **Wikipedia** | Encyclopedia articles | A contact address in the User-Agent (Wikimedia policy) |
+| **Stack Overflow** | Programming questions | Nothing (public API) |
 
 1. The browser sends the query in a POST body, so it never appears in the address bar, browser history or access logs.
 2. The orchestrator asks every source **concurrently** through one shared HTTP client. Each source has a hard time limit; a slow or failing source is reported and skipped while the others' results are still returned.
@@ -50,7 +58,7 @@ flowchart LR
 
 Privacy claims are backed by tests, so a future change can't quietly break them:
 
-- **Only the query leaves the server.** A test sends a search with fake user details (browser, cookies, language, IP headers), captures the outgoing request to the provider, and checks it against an **allowlist** of the only headers permitted to leave. Any other header fails the test, including leaks nobody thought of in advance.
+- **Only the query leaves the server.** For every source, a test sends a search with fake user details (browser, cookies, language, IP headers), captures the outgoing request to the provider (URL, headers and body), and checks it against an **allowlist** of the only headers permitted to leave. Any other header fails the test, including leaks nobody thought of in advance.
 - **Logs never contain search words.** While building this I found that `httpx` logs every request URL at INFO level by default, which would have written users' search words into the logs. The app silences it, and a test (with a negative control proving the test can detect a leak) keeps it that way.
 - **Result links are cleaned.** Tests check that tracking parameters are removed from the links users click.
 
@@ -65,7 +73,7 @@ Privacy claims are backed by tests, so a future change can't quietly break them:
 
 ## Performance
 
-Load-tested with [Locust](https://locust.io) against the real app with **simulated providers** (random 0.2–1.5 s delays, 5% failure rate each), so the test measures this server rather than third-party APIs and uses no API quota. Each simulated user searches, reads for 1–3 s, and searches again. An automated capacity search steps up the load, then bisects to find the most users the server handles within the target.
+Load-tested with [Locust](https://locust.io) against the real app with **two simulated providers** (random 0.2–1.5 s delays, 5% failure rate each), so the test measures this server rather than third-party APIs and uses no API quota. Each simulated user searches, reads for 1–3 s, and searches again. An automated capacity search steps up the load, then bisects to find the most users the server handles within the target.
 
 **Target:** p95 response time ≤ 2 s and errors ≤ 1%. **Result: about 1,250 concurrent users.**
 
@@ -96,11 +104,18 @@ python loadtest/find_capacity.py                 # terminal 2
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # then add your Tavily API key
-uvicorn app.main:app --reload
+cp .env.example .env               # then fill in the two settings below
+uvicorn app.main:app --reload --no-access-log
 ```
 
-Open http://127.0.0.1:8000. Without a Tavily key the app still works, using Wikipedia only.
+Settings in `.env`:
+
+| Setting | Used by | If missing |
+|---|---|---|
+| `TAVILY_API_KEY` | Tavily | Tavily is reported as failed; the other sources still answer |
+| `CONTACT_EMAIL` | Wikipedia's User-Agent, so Wikimedia can reach the operator | Wikipedia is reported as failed; the other sources still answer |
+
+Open http://127.0.0.1:8000. Stack Overflow needs no setting, so the app works even with an empty `.env`.
 
 With Docker:
 
@@ -124,7 +139,7 @@ python -m pytest -v
 app/
   main.py               API routes, lifespan (shared HTTP client)
   models.py             SearchResult model and validation
-  sources/              base.py (interface), tavily.py, wikipedia.py
+  sources/              base.py (interface), tavily.py, wikipedia.py, stackexchange.py
   services/             search.py (orchestrator), deduplication.py, ranking.py,
                         snippets.py, http_client.py, logging_config.py
   static/index.html     the frontend (no build step, no external assets)
@@ -140,7 +155,8 @@ docs/                   README screenshot
 - [x] Privacy-safe logging, tests and CI, Docker image
 - [x] Load test with automated capacity search
 - [x] Prove that no user-identifying headers reach providers (request-level tests)
-- [ ] More sources: Brave Search, Stack Exchange, GitHub, arXiv
+- [x] Stack Overflow source
+- [ ] More sources: arXiv, GitHub
 - [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [ ] Cache with request coalescing, rate limiting, per-source budgets and circuit breakers
 - [ ] Benchmark: result quality versus provider exposure
