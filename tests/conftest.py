@@ -2,6 +2,8 @@ import asyncio
 
 import httpx
 import pytest
+from app.services import search as search_module
+from app.services.cache import SearchCache
 
 
 class FakeNetwork:
@@ -43,3 +45,8 @@ def network():
 def contact_email(monkeypatch):
     """Every test runs with a fake operator contact, never the real one."""
     monkeypatch.setenv("CONTACT_EMAIL", "test@example.com")
+
+@pytest.fixture(autouse=True)
+def empty_cache(monkeypatch):
+    """Every test starts with an empty cache, so tests never share results."""
+    monkeypatch.setattr(search_module, "cache", SearchCache())

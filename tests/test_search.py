@@ -112,3 +112,67 @@ def test_response_lists_every_source_asked_even_if_it_found_nothing():
     ])
 
     assert response["sources_asked"] == ["a", "b", "c"]
+
+
+# ---------- cache ----------
+
+def counting_source(source_name, error=None):
+    """A fake source that remembers every query it was asked."""
+
+    class Counting(SearchSource):
+        name = source_name
+        queries = []
+
+        async def search(self, query, client):
+            self.queries.append(query)
+            if error:
+                raise error
+            return [SearchResult(title="T", url=f"https://{source_name}.com/", source=source_name)]
+
+    return Counting()
+
+
+def search(query, sources):
+    return asyncio.run(search_all(query, client=None, sources=sources))
+
+
+def test_repeated_search_is_answered_from_cache():
+    source = counting_source("a")
+
+    first = search("python", [source])
+    second = search("python", [source])
+
+    assert source.queries == ["python"]          # the provider was asked once
+    assert first["cached"] is False
+    assert second["cached"] is True
+    assert second["results"] == first["results"]
+
+
+def test_cache_matches_case_but_providers_get_the_query_as_typed():
+    source = counting_source("a")
+
+    search("Python Asyncio", [source])
+    second = search("python asyncio", [source])
+
+    assert source.queries == ["Python Asyncio"]  # sent exactly as typed
+    assert second["cached"] is True
+
+
+def test_different_query_is_not_a_cache_hit():
+    source = counting_source("a")
+
+    search("python", [source])
+    search("rust", [source])
+
+    assert source.queries == ["python", "rust"]
+
+
+def test_partial_results_are_not_cached():
+    good = counting_source("good")
+    bad = counting_source("bad", error=RuntimeError("down"))
+
+    search("python", [good, bad])
+    second = search("python", [good, bad])
+
+    assert good.queries == ["python", "python"]  # asked again: nothing was stored
+    assert second["cached"] is False

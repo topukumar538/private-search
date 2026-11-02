@@ -12,6 +12,11 @@ from app.sources.tavily import TavilySource
 from app.sources.wikipedia import WikipediaSource
 from app.sources.stackexchange import StackExchangeSource
 
+from app.services.cache import SearchCache
+
+# Recent complete answers, shared by every search. Memory only.
+cache = SearchCache()
+
 logger = logging.getLogger(__name__)
 
 # Hard cap on one source call, however its time is spent.
@@ -57,7 +62,6 @@ async def run_source(
 def elapsed_ms(start: float) -> int:
     return round((time.perf_counter() - start) * 1000)
 
-
 async def search_all(
     query: str,
     client: httpx.AsyncClient,
@@ -66,6 +70,12 @@ async def search_all(
     # Tests pass fake sources; the app uses the real ones.
     if sources is None:
         sources = SOURCES
+
+    # A recent identical search: answer from memory, ask no provider.
+    cached = cache.get(query)
+    if cached is not None:
+        logger.info("status=cache_hit")
+        return {**cached, "cached": True}
 
     responses = await asyncio.gather(
         *(run_source(source, query, client) for source in sources),
@@ -90,10 +100,17 @@ async def search_all(
     results = remove_duplicates(results)
     results = rank_results(results)
 
-    return {
+    response = {
         "results": results,
         "returned_count": len(results),
         "sources_asked": [source.name for source in sources],
         "partial": bool(failed_sources),
         "failed_sources": failed_sources,
     }
+
+    # Only complete answers are kept: one failed source must not be
+    # missing from everyone's results for the next 5 minutes.
+    if not failed_sources:
+        cache.set(query, response)
+
+    return {**response, "cached": False}

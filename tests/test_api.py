@@ -78,3 +78,22 @@ def test_invalid_queries_are_rejected(client, query):
     response = client.post("/api/search", json={"query": query})
 
     assert response.status_code == 422
+
+
+def test_cache_cleaner_removes_expired_searches_while_app_runs(monkeypatch):
+    import time
+
+    from app import main as main_module
+    from app.services.cache import SearchCache
+
+    now = [0.0]
+    cache = SearchCache(ttl_seconds=300, clock=lambda: now[0])
+    cache.set("old search", {"results": []})
+    now[0] = 300                                   # it has expired
+    monkeypatch.setattr(search_module, "cache", cache)
+    monkeypatch.setattr(main_module, "CACHE_CLEANUP_SECONDS", 0.01)
+
+    with TestClient(app):
+        time.sleep(0.2)                            # let the cleaner run
+
+    assert len(cache) == 0

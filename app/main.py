@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,13 +6,23 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.services.cache import CACHE_CLEANUP_SECONDS
 from app.services.http_client import create_http_client
 from app.services.logging_config import configure_logging
+from app.services import search as search_module
 from app.services.search import search_all
 
 configure_logging()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+async def clean_cache_forever():
+    """Every few minutes, remove expired searches from memory,
+    including ones nobody searches again."""
+    while True:
+        await asyncio.sleep(CACHE_CLEANUP_SECONDS)
+        search_module.cache.remove_expired()
 
 
 @asynccontextmanager
@@ -20,7 +31,12 @@ async def lifespan(app: FastAPI):
     # closed at shutdown, shared by every search.
     async with create_http_client() as client:
         app.state.http_client = client
-        yield
+        cleaner = asyncio.create_task(clean_cache_forever())
+
+        try:
+            yield
+        finally:
+            cleaner.cancel()
 
 
 app = FastAPI(title="Private Search", lifespan=lifespan)
