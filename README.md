@@ -13,7 +13,9 @@ A metasearch engine that queries several search providers at once, merges their 
 ```mermaid
 flowchart LR
     U[Browser] -->|POST /api/search| A[FastAPI app<br/>validation, no-store]
-    A --> O[Orchestrator]
+    A --> K{Recent identical<br/>search in memory?}
+    K -->|yes: answer instantly,<br/>no provider asked| U
+    K -->|no| O[Orchestrator]
     O -->|parallel, 5 s cap each| T[Tavily]
     O -->|parallel, 5 s cap each| W[Wikipedia]
     O -->|parallel, 5 s cap each| S[Stack Overflow]
@@ -21,7 +23,7 @@ flowchart LR
     W --> D
     S --> D
     D --> R[Rank<br/>reciprocal rank fusion]
-    R -->|results + privacy report| U
+    R -->|results + privacy report<br/>complete answers kept 5 min| U
 ```
 
 | Source | Good for | Needs |
@@ -31,20 +33,22 @@ flowchart LR
 | **Stack Overflow** | Programming questions | Nothing (public API) |
 
 1. The browser sends the query in a POST body, so it never appears in the address bar, browser history or access logs.
-2. The orchestrator asks every source **concurrently** through one shared HTTP client. Each source has a hard time limit; a slow or failing source is reported and skipped while the others' results are still returned.
-3. Results are validated at the boundary: a malformed item (missing title, non-web URL) is dropped on its own instead of failing the whole source. Snippets are cleaned of leftover markup and shortened at a word boundary.
-4. Duplicate pages are merged using normalized URLs (case, default ports, tracking parameters such as `utm_source`, percent-encoding).
-5. Results are ranked with **reciprocal rank fusion**, so pages that several sources agree on rise to the top.
+2. **Recent searches are answered from memory.** If the same search (ignoring case and extra spaces) was answered in the last 5 minutes, the saved results are returned instantly and no provider is asked. Only complete answers are saved; if a source failed, the next search asks again.
+3. Otherwise, the orchestrator asks every source **concurrently** through one shared HTTP client. Each source has a hard time limit; a slow or failing source is reported and skipped while the others' results are still returned.
+4. Results are validated at the boundary: a malformed item (missing title, non-web URL) is dropped on its own instead of failing the whole source. Snippets are cleaned of leftover markup and shortened at a word boundary.
+5. Duplicate pages are merged using normalized URLs (case, default ports, tracking parameters such as `utm_source`, percent-encoding).
+6. Results are ranked with **reciprocal rank fusion**, so pages that several sources agree on rise to the top.
 
 ## Privacy: what it protects, and what it doesn't
 
-**In one sentence:** search providers can't see who is searching, and the app keeps no record of searches or visitors.
+**In one sentence:** search providers can't see who is searching, and the app keeps no lasting record of searches or visitors.
 
 | | |
 |---|---|
 | **Search providers see** | The search words, as typed, coming from this server's IP address |
 | **Kept from providers** | The user's IP address, cookies and browser details (user agent, language, referring page) |
 | **Server logs record** | Which providers answered, how fast, and error types. Never search words, error messages (which can contain URLs) or visitors' IP addresses (uvicorn's access log is turned off) |
+| **Recent searches in memory** | To answer repeats, complete results are kept in memory, never on disk, and never with who asked. Results are never served after 5 minutes, and a background task removes expired searches within about 10 minutes. A restart clears everything. |
 | **Result links** | Tracking parameters (`utm_*`, `gclid`, `fbclid`) are removed, and no referrer is sent, so the site doesn't learn the visit came from here |
 | **The page itself** | No cookies, accounts or tracking scripts; nothing is loaded from another website |
 
@@ -67,6 +71,7 @@ Privacy claims are backed by tests, so a future change can't quietly break them:
 - **Async fan-out with graceful degradation:** `asyncio.gather` over all sources with per-source timeouts; partial results instead of total failure.
 - **Pluggable sources:** every provider implements one `SearchSource` interface, so adding a provider is one file plus tests.
 - **Validation at the boundary:** a frozen Pydantic `SearchResult` model rejects unsafe or malformed data before it reaches ranking or the browser.
+- **In-memory cache:** 5-minute expiry counted from when results were fetched, a 500-entry LRU limit, and an asyncio background task that removes expired searches. A repeated search is answered with no provider call, so providers see each repeated search only once.
 - **One shared HTTP client** created in FastAPI's lifespan, with connection limits and timeouts tuned below the orchestrator's cap.
 - **100+ automated tests** using a fake network (`httpx.MockTransport`), so no test touches a real API.
 - **CI on every push:** tests, Docker build, a check that secrets and tests are not in the image, and a container health smoke test.
@@ -88,7 +93,7 @@ Load-tested with [Locust](https://locust.io) against the real app with **two sim
 
 - Up to 1,000 users, p95 equals the slowest simulated provider's delay: the server's own overhead is negligible.
 - The server saturates at about 350 searches/s. Beyond that, requests queue and latency rises, but errors stay at the expected ~0.25% (both providers failing on the same search). It slows down instead of failing.
-- Caveat: measured in WSL on one machine running both Locust and the server, so capacity on dedicated hardware is likely higher.
+- Caveat: measured before the cache and the third source were added, in WSL on one machine running both Locust and the server, so capacity on dedicated hardware is likely higher.
 
 Reproduce it:
 
@@ -140,8 +145,8 @@ app/
   main.py               API routes, lifespan (shared HTTP client)
   models.py             SearchResult model and validation
   sources/              base.py (interface), tavily.py, wikipedia.py, stackexchange.py
-  services/             search.py (orchestrator), deduplication.py, ranking.py,
-                        snippets.py, http_client.py, logging_config.py
+  services/             search.py (orchestrator), cache.py, deduplication.py,
+                        ranking.py, snippets.py, http_client.py, logging_config.py
   static/index.html     the frontend (no build step, no external assets)
 tests/                  unit and API tests with a fake network
 loadtest/               Locust users, stub server, automated capacity search
@@ -158,5 +163,7 @@ docs/                   README screenshot
 - [x] Stack Overflow source
 - [ ] More sources: arXiv, GitHub
 - [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
-- [ ] Cache with request coalescing, rate limiting, per-source budgets and circuit breakers
+- [x] In-memory search cache with scheduled cleanup
+- [ ] Rate limiting, per-source budgets and circuit breakers
+- [ ] Request coalescing and a shared Redis cache (memory-only)
 - [ ] Benchmark: result quality versus provider exposure
