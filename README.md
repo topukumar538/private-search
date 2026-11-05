@@ -155,15 +155,18 @@ docs/                   README screenshot
 
 ## Roadmap
 
+## Roadmap
+
 - [x] Concurrent multi-source search with partial-failure handling
 - [x] URL normalization, deduplication and rank fusion
 - [x] Privacy-safe logging, tests and CI, Docker image
 - [x] Load test with automated capacity search
 - [x] Prove that no user-identifying headers reach providers (request-level tests)
 - [x] Stack Overflow source
-- [ ] More sources: arXiv, GitHub
-- [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [x] In-memory search cache with scheduled cleanup
-- [ ] Rate limiting, per-source budgets and circuit breakers
-- [ ] Request coalescing and a shared Redis cache (memory-only)
+- [x] Circuit breaker per source
+- [ ] Rate limiting and per-source budgets
+- [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [ ] Benchmark: result quality versus provider exposure
+- [ ] More sources: arXiv, GitHub
+- [ ] Request coalescing and a shared Redis cache (memory-only)

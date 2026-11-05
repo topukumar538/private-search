@@ -176,3 +176,29 @@ def test_partial_results_are_not_cached():
 
     assert good.queries == ["python", "python"]  # asked again: nothing was stored
     assert second["cached"] is False
+
+
+# ---------- circuit breaker ----------
+
+def test_source_failing_three_times_is_skipped_instantly(caplog):
+    good = counting_source("good")
+    bad = counting_source("bad", error=RuntimeError("down"))
+
+    for query in ["one", "two", "three"]:      # different queries: no cache hits
+        search(query, [good, bad])
+
+    response = search("four", [good, bad])
+
+    assert bad.queries == ["one", "two", "three"]   # not asked the 4th time
+    assert response["failed_sources"] == ["bad"]
+    assert "source=bad status=skipped reason=circuit_open" in caplog.text
+
+
+def test_open_breaker_for_one_source_does_not_affect_others():
+    good = counting_source("good")
+    bad = counting_source("bad", error=RuntimeError("down"))
+
+    for query in ["one", "two", "three", "four"]:
+        search(query, [good, bad])
+
+    assert good.queries == ["one", "two", "three", "four"]

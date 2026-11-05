@@ -48,5 +48,7 @@ def contact_email(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def empty_cache(monkeypatch):
-    """Every test starts with an empty cache, so tests never share results."""
+    """Every test starts with an empty cache and closed circuit breakers,
+    so tests never share results or failures."""
     monkeypatch.setattr(search_module, "cache", SearchCache())
+    monkeypatch.setattr(search_module, "breakers", {})

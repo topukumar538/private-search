@@ -13,9 +13,13 @@ from app.sources.wikipedia import WikipediaSource
 from app.sources.stackexchange import StackExchangeSource
 
 from app.services.cache import SearchCache
+from app.services.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 # Recent complete answers, shared by every search. Memory only.
 cache = SearchCache()
+
+# One circuit breaker per source name, created the first time it's needed.
+breakers: dict[str, CircuitBreaker] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +41,21 @@ async def run_source(
     never the query and never the error message (messages can contain
     request URLs, and URLs can contain the query).
     """
+    breaker = breakers.setdefault(source.name, CircuitBreaker())
+
+    if not breaker.allow_request():
+        logger.warning("source=%s status=skipped reason=circuit_open", source.name)
+        raise CircuitOpenError(source.name)
+
     start = time.perf_counter()
 
     try:
         results = await asyncio.wait_for(source.search(query, client), timeout=SOURCE_TIMEOUT)
+    except asyncio.CancelledError:
+        breaker.record_cancelled()
+        raise
     except Exception as error:
+        breaker.record_failure()
         logger.warning(
             "source=%s status=error error=%s duration_ms=%d",
             source.name,
@@ -50,6 +64,7 @@ async def run_source(
         )
         raise
 
+    breaker.record_success()
     logger.info(
         "source=%s status=ok results=%d duration_ms=%d",
         source.name,
