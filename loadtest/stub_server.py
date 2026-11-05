@@ -22,6 +22,8 @@ from app.main import app
 from app.models import SearchResult
 from app.services import search as search_module
 from app.sources.base import SearchSource
+from app import main as main_module
+from app.services.rate_limiter import RateLimiter
 
 FAILURE_RATE = 0.05
 
@@ -57,6 +59,10 @@ search_module.SOURCES[:] = [
     FakeSource("tavily", 0.6, 1.5),
     FakeSource("wikipedia", 0.2, 0.6),
 ]
+
+# Locust sends every simulated user from one IP address, so the per-visitor
+# limit would block the test. Load tests measure the server, not the limit.
+main_module.rate_limiter = RateLimiter(limit=10**9)
 
 if __name__ == "__main__":
     uvicorn.run(

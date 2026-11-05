@@ -97,3 +97,58 @@ def test_cache_cleaner_removes_expired_searches_while_app_runs(monkeypatch):
         time.sleep(0.2)                            # let the cleaner run
 
     assert len(cache) == 0
+
+# ---------- rate limiting ----------
+
+def test_eleventh_search_in_a_minute_gets_429(client, monkeypatch):
+    use_sources(monkeypatch, WorkingSource())
+
+    codes = [client.post("/api/search", json={"query": f"q{i}"}).status_code for i in range(11)]
+
+    assert codes == [200] * 10 + [429]
+
+
+def test_429_says_how_long_to_wait(client, monkeypatch):
+    use_sources(monkeypatch, WorkingSource())
+    for i in range(10):
+        client.post("/api/search", json={"query": f"q{i}"})
+
+    response = client.post("/api/search", json={"query": "one more"})
+
+    assert int(response.headers["Retry-After"]) > 0
+    assert "Too many searches" in response.json()["detail"]
+
+
+def test_different_visitors_have_separate_limits(client, monkeypatch):
+    use_sources(monkeypatch, WorkingSource())
+    for i in range(10):
+        client.post("/api/search", json={"query": f"q{i}"}, headers={"X-Forwarded-For": "1.1.1.1"})
+
+    response = client.post("/api/search", json={"query": "x"}, headers={"X-Forwarded-For": "2.2.2.2"})
+
+    assert response.status_code == 200
+
+
+def test_faking_the_start_of_x_forwarded_for_does_not_bypass_the_limit(client, monkeypatch):
+    use_sources(monkeypatch, WorkingSource())
+
+    # A bot changes the first address each time; the proxy's last one stays the same.
+    codes = [
+        client.post(
+            "/api/search",
+            json={"query": f"q{i}"},
+            headers={"X-Forwarded-For": f"10.0.0.{i}, 5.5.5.5"},
+        ).status_code
+        for i in range(11)
+    ]
+
+    assert codes[-1] == 429
+
+
+def test_raw_ip_is_never_stored(client, monkeypatch):
+    from app import main as main_module
+
+    use_sources(monkeypatch, WorkingSource())
+    client.post("/api/search", json={"query": "x"}, headers={"X-Forwarded-For": "103.45.67.89"})
+
+    assert "103.45.67.89" not in str(main_module.rate_limiter._windows)

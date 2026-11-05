@@ -3,12 +3,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.services.cache import CACHE_CLEANUP_SECONDS
 from app.services.http_client import create_http_client
 from app.services.logging_config import configure_logging
+from app.services.rate_limiter import RateLimiter, visitor_key
 from app.services import search as search_module
 from app.services.search import search_all
 
@@ -16,13 +17,17 @@ configure_logging()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+# Searches per visitor per minute, shared by every request. Memory only.
+rate_limiter = RateLimiter()
+
 
 async def clean_cache_forever():
-    """Every few minutes, remove expired searches from memory,
-    including ones nobody searches again."""
+    """Every few minutes, remove expired searches and finished
+    rate-limit windows from memory, including ones nobody uses again."""
     while True:
         await asyncio.sleep(CACHE_CLEANUP_SECONDS)
         search_module.cache.remove_expired()
+        rate_limiter.remove_expired()
 
 
 @asynccontextmanager
@@ -73,8 +78,32 @@ async def health():
     return {"status": "ok"}
 
 
+def client_ip(request: Request) -> str:
+    """The visitor's IP address.
+
+    On Render, requests arrive through Render's proxy, which adds the real
+    address at the END of X-Forwarded-For. A visitor can put fake addresses
+    at the start of that header, so only the last one is trusted.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+
+    return request.client.host if request.client else "unknown"
+
+
 @app.post("/api/search")
 async def search(body: SearchRequest, request: Request):
+    wait = rate_limiter.check(visitor_key(client_ip(request)))
+
+    if wait:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many searches. Please wait a moment and try again."},
+            headers={"Retry-After": str(wait)},
+        )
+
     try:
         return await search_all(body.query, request.app.state.http_client)
     except RuntimeError:

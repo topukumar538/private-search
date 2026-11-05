@@ -49,6 +49,7 @@ flowchart LR
 | **Kept from providers** | The user's IP address, cookies and browser details (user agent, language, referring page) |
 | **Server logs record** | Which providers answered, how fast, and error types. Never search words, error messages (which can contain URLs) or visitors' IP addresses (uvicorn's access log is turned off) |
 | **Recent searches in memory** | To answer repeats, complete results are kept in memory, never on disk, and never with who asked. Results are never served after 5 minutes, and a background task removes expired searches within about 10 minutes. A restart clears everything. |
+| **Rate limiting** | Each visitor may make 10 searches a minute. To count them, a keyed hash of the IP address (HMAC with a random secret that exists only in memory) is kept for about a minute; the IP itself is never stored, and nothing is logged. |
 | **Result links** | Tracking parameters (`utm_*`, `gclid`, `fbclid`) are removed, and no referrer is sent, so the site doesn't learn the visit came from here |
 | **The page itself** | No cookies, accounts or tracking scripts; nothing is loaded from another website |
 
@@ -165,7 +166,8 @@ docs/                   README screenshot
 - [x] Stack Overflow source
 - [x] In-memory search cache with scheduled cleanup
 - [x] Circuit breaker per source
-- [ ] Rate limiting and per-source budgets
+- [x] Rate limiting and per-source budgets
+- [ ] Per-source daily budgets (with Redis, so they survive restarts)
 - [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [ ] Benchmark: result quality versus provider exposure
 - [ ] More sources: arXiv, GitHub

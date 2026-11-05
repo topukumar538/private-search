@@ -4,7 +4,8 @@ import httpx
 import pytest
 from app.services import search as search_module
 from app.services.cache import SearchCache
-
+from app import main as main_module
+from app.services.rate_limiter import RateLimiter
 
 class FakeNetwork:
     """Stands in for the internet: records requests, returns a set response."""
@@ -52,3 +53,8 @@ def empty_cache(monkeypatch):
     so tests never share results or failures."""
     monkeypatch.setattr(search_module, "cache", SearchCache())
     monkeypatch.setattr(search_module, "breakers", {})
+
+@pytest.fixture(autouse=True)
+def fresh_rate_limiter(monkeypatch):
+    """Every test starts with nobody rate-limited."""
+    monkeypatch.setattr(main_module, "rate_limiter", RateLimiter())
