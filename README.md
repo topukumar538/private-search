@@ -34,7 +34,7 @@ flowchart LR
 
 1. The browser sends the query in a POST body, so it never appears in the address bar, browser history or access logs.
 2. **Recent searches are answered from memory.** If the same search (ignoring case and extra spaces) was answered in the last 5 minutes, the saved results are returned instantly and no provider is asked. Only complete answers are saved; if a source failed, the next search asks again.
-3. Otherwise, the orchestrator asks every source **concurrently** through one shared HTTP client. Each source has a hard time limit; a slow or failing source is reported and skipped while the others' results are still returned.
+3. Otherwise, the orchestrator asks every source **concurrently** through one shared HTTP client. Each source has a hard time limit; a slow or failing source is reported and skipped while the others' results are still returned. A source that keeps failing is skipped instantly for a while (circuit breaker), so users don't wait for its timeout.
 4. Results are validated at the boundary: a malformed item (missing title, non-web URL) is dropped on its own instead of failing the whole source. Snippets are cleaned of leftover markup and shortened at a word boundary.
 5. Duplicate pages are merged using normalized URLs (case, default ports, tracking parameters such as `utm_source`, percent-encoding).
 6. Results are ranked with **reciprocal rank fusion**, so pages that several sources agree on rise to the top.
@@ -72,6 +72,7 @@ Privacy claims are backed by tests, so a future change can't quietly break them:
 - **Pluggable sources:** every provider implements one `SearchSource` interface, so adding a provider is one file plus tests.
 - **Validation at the boundary:** a frozen Pydantic `SearchResult` model rejects unsafe or malformed data before it reaches ranking or the browser.
 - **In-memory cache:** 5-minute expiry counted from when results were fetched, a 500-entry LRU limit, and an asyncio background task that removes expired searches. A repeated search is answered with no provider call, so providers see each repeated search only once.
+- **Circuit breaker per source:** after 3 failures in a row within 60 s, the source is skipped instantly instead of waiting for its timeout. After 30 s one trial request checks if it's back; if not, the wait doubles, up to 5 minutes.
 - **One shared HTTP client** created in FastAPI's lifespan, with connection limits and timeouts tuned below the orchestrator's cap.
 - **100+ automated tests** using a fake network (`httpx.MockTransport`), so no test touches a real API.
 - **CI on every push:** tests, Docker build, a check that secrets and tests are not in the image, and a container health smoke test.
@@ -145,15 +146,14 @@ app/
   main.py               API routes, lifespan (shared HTTP client)
   models.py             SearchResult model and validation
   sources/              base.py (interface), tavily.py, wikipedia.py, stackexchange.py
-  services/             search.py (orchestrator), cache.py, deduplication.py,
-                        ranking.py, snippets.py, http_client.py, logging_config.py
+  services/             search.py (orchestrator), cache.py, circuit_breaker.py,
+                        deduplication.py, ranking.py, snippets.py,
+                        http_client.py, logging_config.py
   static/index.html     the frontend (no build step, no external assets)
 tests/                  unit and API tests with a fake network
 loadtest/               Locust users, stub server, automated capacity search
 docs/                   README screenshot
 ```
-
-## Roadmap
 
 ## Roadmap
 
