@@ -49,6 +49,18 @@ def test_different_queries_do_not_mix():
     assert cache.get("python asyncio") is None
 
 
+def test_has_is_true_only_for_fresh_entries():
+    cache, clock = make_cache(ttl_seconds=300)
+    cache.set("python", {"results": ["a"]})
+
+    assert cache.has("Python") is True
+    assert cache.has("rust") is False
+
+    clock.now = 300
+
+    assert cache.has("python") is False
+
+
 # ---------- expiry ----------
 
 def test_entry_is_kept_until_it_expires():

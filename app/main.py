@@ -81,21 +81,27 @@ async def health():
 def client_ip(request: Request) -> str:
     """The visitor's IP address.
 
-    On Render, requests arrive through Render's proxy, which adds the real
-    address at the END of X-Forwarded-For. A visitor can put fake addresses
-    at the start of that header, so only the last one is trusted.
+    On Render, requests pass through Cloudflare, which puts the visitor's
+    real address in CF-Connecting-IP and replaces any value the visitor
+    sent. X-Forwarded-For is not used: visitors can fake its first entry,
+    and its last entry is a Cloudflare server that changes between requests.
+    Without Cloudflare (running locally), the direct connection is the visitor.
     """
-    forwarded = request.headers.get("x-forwarded-for")
+    cloudflare_ip = request.headers.get("cf-connecting-ip")
 
-    if forwarded:
-        return forwarded.split(",")[-1].strip()
+    if cloudflare_ip:
+        return cloudflare_ip.strip()
 
     return request.client.host if request.client else "unknown"
 
 
 @app.post("/api/search")
 async def search(body: SearchRequest, request: Request):
-    wait = rate_limiter.check(visitor_key(client_ip(request)))
+    # Only searches that will reach the providers count towards the limit.
+    # A repeated search answered from the cache costs the providers nothing.
+    wait = 0
+    if not search_module.cache.has(body.query):
+        wait = rate_limiter.check(visitor_key(client_ip(request)))
 
     if wait:
         return JSONResponse(

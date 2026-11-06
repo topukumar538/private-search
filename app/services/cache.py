@@ -49,6 +49,11 @@ class SearchCache:
         self._entries.move_to_end(key)
         return value
 
+    def has(self, query: str) -> bool:
+        """Is a fresh answer stored for this query? Changes nothing."""
+        entry = self._entries.get(self.make_key(query))
+        return entry is not None and self.clock() < entry[0]
+
     def set(self, query: str, value) -> None:
         key = self.make_key(query)
         self._entries[key] = (self.clock() + self.ttl_seconds, value)
