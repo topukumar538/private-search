@@ -1046,6 +1046,13 @@
           return;
         }
 
+        if (response.status === 429) {
+          const seconds = Number(response.headers.get("Retry-After"));
+          throw new Error(seconds > 0
+            ? `Too many searches. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`
+            : "Too many searches. Please wait a moment and try again.");
+        }
+
         if (!response.ok) {
           const message = typeof data.detail === "string"
             ? data.detail
