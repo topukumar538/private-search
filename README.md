@@ -49,7 +49,7 @@ flowchart LR
 | **Kept from providers** | The user's IP address, cookies and browser details (user agent, language, referring page) |
 | **Server logs record** | Which providers answered, how fast, and error types. Never search words, error messages (which can contain URLs) or visitors' IP addresses (uvicorn's access log is turned off) |
 | **Recent searches in memory** | To answer repeats, complete results are kept in memory, never on disk, and never with who asked. Results are never served after 5 minutes, and a background task removes expired searches within about 10 minutes. A restart clears everything. |
-| **Rate limiting** | Each visitor may make 10 searches a minute. To count them, a keyed hash of the IP address (HMAC with a random secret that exists only in memory) is kept for about a minute; the IP itself is never stored, and nothing is logged. |
+| **Rate limiting** | Each visitor may make 10 new searches a minute; repeated searches answered from the cache don't count. The visitor's IP comes from Cloudflare's `CF-Connecting-IP` header (Render serves the app through Cloudflare). To count searches, a keyed hash of the IP (HMAC with a random secret that exists only in memory) is kept for about a minute; the IP itself is never stored, and nothing is logged. |
 | **Result links** | Tracking parameters (`utm_*`, `gclid`, `fbclid`) are removed, and no referrer is sent, so the site doesn't learn the visit came from here |
 | **The page itself** | No cookies, accounts or tracking scripts; nothing is loaded from another website |
 
@@ -74,6 +74,7 @@ Privacy claims are backed by tests, so a future change can't quietly break them:
 - **Validation at the boundary:** a frozen Pydantic `SearchResult` model rejects unsafe or malformed data before it reaches ranking or the browser.
 - **In-memory cache:** 5-minute expiry counted from when results were fetched, a 500-entry LRU limit, and an asyncio background task that removes expired searches. A repeated search is answered with no provider call, so providers see each repeated search only once.
 - **Circuit breaker per source:** after 3 failures in a row within 60 s, the source is skipped instantly instead of waiting for its timeout. After 30 s one trial request checks if it's back; if not, the wait doubles, up to 5 minutes.
+- **Per-visitor rate limiting:** 10 new searches a minute, counted with a keyed hash of the IP that lives only in memory. Over the limit, the API answers `429` with `Retry-After`, and every search response carries `X-RateLimit-Remaining`.
 - **One shared HTTP client** created in FastAPI's lifespan, with connection limits and timeouts tuned below the orchestrator's cap.
 - **100+ automated tests** using a fake network (`httpx.MockTransport`), so no test touches a real API.
 - **CI on every push:** tests, Docker build, a check that secrets and tests are not in the image, and a container health smoke test.
@@ -144,12 +145,12 @@ python -m pytest -v
 
 ```
 app/
-  main.py               API routes, lifespan (shared HTTP client)
+  main.py               API routes, rate limit, lifespan (HTTP client, cleaner)
   models.py             SearchResult model and validation
   sources/              base.py (interface), tavily.py, wikipedia.py, stackexchange.py
   services/             search.py (orchestrator), cache.py, circuit_breaker.py,
-                        deduplication.py, ranking.py, snippets.py,
-                        http_client.py, logging_config.py
+                        rate_limiter.py, deduplication.py, ranking.py,
+                        snippets.py, http_client.py, logging_config.py
   static/index.html     the frontend (no build step, no external assets)
 tests/                  unit and API tests with a fake network
 loadtest/               Locust users, stub server, automated capacity search
@@ -166,7 +167,7 @@ docs/                   README screenshot
 - [x] Stack Overflow source
 - [x] In-memory search cache with scheduled cleanup
 - [x] Circuit breaker per source
-- [x] Rate limiting and per-source budgets
+- [x] Per-visitor rate limiting (hashed IPs, memory only)
 - [ ] Per-source daily budgets (with Redis, so they survive restarts)
 - [ ] Query planner that sends each query only to the sources likely to help, limiting how much of the query stream any one provider sees
 - [ ] Benchmark: result quality versus provider exposure
