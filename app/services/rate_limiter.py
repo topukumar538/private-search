@@ -44,6 +44,16 @@ class RateLimiter:
         self._windows[key] = (start, count + 1)
         return 0
 
+    def remaining(self, key: str) -> int:
+        """How many more searches this visitor may make in their current minute."""
+        now = self.clock()
+        start, count = self._windows.get(key, (now, 0))
+
+        if now - start >= self.window_seconds:
+            return self.limit
+
+        return max(0, self.limit - count)
+
     def remove_expired(self) -> int:
         """Forget visitors whose minute is over. Returns how many were removed."""
         now = self.clock()

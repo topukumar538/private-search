@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -96,19 +96,29 @@ def client_ip(request: Request) -> str:
 
 
 @app.post("/api/search")
-async def search(body: SearchRequest, request: Request):
+async def search(body: SearchRequest, request: Request, response: Response):
+    key = visitor_key(client_ip(request))
+
     # Only searches that will reach the providers count towards the limit.
     # A repeated search answered from the cache costs the providers nothing.
     wait = 0
     if not search_module.cache.has(body.query):
-        wait = rate_limiter.check(visitor_key(client_ip(request)))
+        wait = rate_limiter.check(key)
+
+    # Standard headers that tell the browser where it stands, without any IP.
+    limit_headers = {
+        "X-RateLimit-Limit": str(rate_limiter.limit),
+        "X-RateLimit-Remaining": str(rate_limiter.remaining(key)),
+    }
 
     if wait:
         return JSONResponse(
             status_code=429,
             content={"detail": "Too many searches. Please wait a moment and try again."},
-            headers={"Retry-After": str(wait)},
+            headers={**limit_headers, "Retry-After": str(wait)},
         )
+
+    response.headers.update(limit_headers)
 
     try:
         return await search_all(body.query, request.app.state.http_client)

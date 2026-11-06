@@ -173,3 +173,16 @@ def test_new_searches_still_count_after_cached_ones(client, monkeypatch):
 
     assert cached.status_code == 200
     assert new.status_code == 429
+
+
+def test_responses_say_how_many_searches_are_left(client, monkeypatch):
+    use_sources(monkeypatch, WorkingSource())
+
+    remaining = [
+        client.post("/api/search", json={"query": f"q{i}"}).headers["X-RateLimit-Remaining"]
+        for i in range(3)
+    ]
+    cached = client.post("/api/search", json={"query": "q0"}).headers["X-RateLimit-Remaining"]
+
+    assert remaining == ["9", "8", "7"]
+    assert cached == "7"                       # a cached search used nothing

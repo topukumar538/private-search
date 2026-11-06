@@ -62,6 +62,17 @@ def test_visitors_are_limited_separately():
     assert limiter.check("bob") == 0
 
 
+def test_remaining_counts_down_and_resets():
+    limiter, clock = make_limiter()
+
+    assert limiter.remaining("visitor") == 10
+    search_times(limiter, "visitor", 4)
+    assert limiter.remaining("visitor") == 6
+
+    clock.now = 60
+    assert limiter.remaining("visitor") == 10
+
+
 # ---------- cleanup ----------
 
 def test_remove_expired_forgets_finished_minutes_only():
